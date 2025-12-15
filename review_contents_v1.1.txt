@@ -1,0 +1,292 @@
+================================
+PYLON 코드 리뷰 패키지 v1.1 완성!
+================================
+
+파일명: review.zip
+크기: 62,874 바이트 (약 61 KB) ⬆️ 이전 55KB에서 증가
+위치: C:\251213_pylon\review.zip
+버전: v1.1 (2025-12-13 업데이트)
+
+================================
+⚠️ v1.1 주요 업데이트
+================================
+
+✅ 신규 파일 (3개)
+  • config/governance.yaml         - 거버넌스 설정 파일
+  • src/config_loader.py            - YAML 설정 로더
+  • src/verified_savings.py         - 검증 절감액 관리
+
+✅ 핵심 개선사항 (7가지)
+  1. Floating point artifact 수정 (pytest 통과)
+  2. 실제 사용자 기능 (사이드바 입력)
+  3. Governance 자동화 (데이터 최신성 자동 계산)
+  4. Risk Score 개선 (raw + display 이중 표시)
+  5. 검증 완료 플로우 (verified_savings → 성과 관리)
+  6. 완전 한글화 (모든 UI 라벨)
+  7. 의존성 추가 (PyYAML>=6.0)
+
+✅ 테스트 상태
+  • 24/24 tests PASSED ✅
+  • Floating point artifact 해결 ✅
+  • Risk Score 테스트 업데이트 ✅
+
+================================
+압축 파일 내용 (v1.1)
+================================
+
+📖 리뷰 가이드 (필독! 업데이트됨)
+  └─ CODE_REVIEW_GUIDE.md         - v1.1 업데이트 (신규 변경사항 반영)
+
+📁 src/ (핵심 비즈니스 로직) - 10개 파일 ⚠️ 3개 신규
+  ├─ analytics.py                 - ⚠️ 수정: floating point, risk score
+  ├─ models.py                    - ⚠️ 수정: GovernanceBadge 자동화
+  ├─ actions.py                   - Action 관리
+  ├─ data_access.py               - 데이터 접근 레이어
+  ├─ experiments.py               - 실험 관리
+  ├─ sample_data.py               - 샘플 데이터 생성
+  ├─ config_loader.py             - ⚠️ 신규: YAML 설정 로더
+  ├─ verified_savings.py          - ⚠️ 신규: 검증 절감액 관리
+  └─ __init__.py
+
+📁 components/ (재사용 컴포넌트) - 4개 파일
+  ├─ global_controls.py           - ⚠️ 수정: 한글 라벨
+  ├─ action_inbox.py              - ⚠️ 수정: 한글화
+  ├─ widget_card.py               - Widget 카드
+  └─ __init__.py
+
+📁 pages/ (4개 메인 페이지) - 5개 파일 ⚠️ 한글 파일명
+  ├─ 1_에너지_인텔리전스.py       - ⚠️ 수정: 사용자 입력, governance
+  ├─ 2_성과_리스크_관리.py         - ⚠️ 수정: risk score, 3단계 절감
+  ├─ 3_최적화_실행.py              - ⚠️ 수정: 사용자 입력, governance
+  ├─ 4_검증_실증.py                - ⚠️ 수정: 검증 완료 플로우
+  └─ __init__.py
+
+📁 config/ (설정 파일) - ⚠️ 신규 폴더
+  └─ governance.yaml              - ⚠️ 신규: 거버넌스 설정
+
+📁 tests/ (단위 테스트) - 2개 파일
+  ├─ test_analytics.py            - ⚠️ 수정: Risk Score 테스트
+  └─ __init__.py
+
+📄 메인 파일
+  ├─ app.py                       - ⚠️ 수정: 사용자 입력, governance
+  └─ requirements.txt             - ⚠️ 수정: PyYAML 추가
+
+📚 문서
+  ├─ README.md                    - 프로젝트 개요
+  ├─ DEPLOYMENT_GUIDE.md          - 배포 가이드
+  ├─ PROJECT_SUMMARY.md           - 완성 요약
+  └─ ARCHITECTURE.md              - 아키텍처
+
+================================
+v1.0 → v1.1 변경사항 상세
+================================
+
+🔧 수정된 파일 (11개)
+  1. src/analytics.py
+     - calculate_plan_variance(): round(, 10) 추가
+     - calculate_risk_score(): Dict 반환 (raw + display)
+     
+  2. src/models.py
+     - GovernanceBadge.create_from_config_and_data() 추가
+     
+  3. app.py
+     - 사이드바 "👤 사용자" 섹션 추가
+     - Governance 자동 생성 로직
+     
+  4-7. pages/*.py (4개 파일)
+     - 모든 페이지에 사용자 입력 추가
+     - Governance 자동 생성
+     - 한글 타이틀
+     
+  8. pages/2_성과_리스크_관리.py
+     - Risk Score 이중 표시 (raw + display)
+     - 3단계 절감 (예상/진행/확정)
+     - 한글 컬럼명
+     
+  9. pages/4_검증_실증.py
+     - "검증 완료로 반영" 버튼 추가
+     - verified_savings 저장
+     
+  10. components/global_controls.py
+      - 한글 라벨 ("공식 기준", "계획 잠금" 등)
+      
+  11. components/action_inbox.py
+      - 한글화 ("내 작업함", "대기/진행" 등)
+      
+  12. tests/test_analytics.py
+      - Risk Score 테스트 Dict 반환 대응
+      
+  13. requirements.txt
+      - PyYAML>=6.0 추가
+
+🆕 신규 파일 (3개)
+  1. config/governance.yaml
+     - official_version, plan_locked, exception_applied
+     
+  2. src/config_loader.py
+     - load_governance_config() 함수
+     - Fallback to defaults
+     
+  3. src/verified_savings.py
+     - VerifiedSavingsManager 클래스
+     - create_verified_saving()
+     - get_total_verified_savings()
+
+================================
+코드 리뷰 우선순위 (v1.1)
+================================
+
+⏱️ Day 1 (1시간 10분) - 신규 변경 집중
+  1. CODE_REVIEW_GUIDE.md 읽기 (5분) ★ 필독
+  2. src/analytics.py (20분) ⭐⭐⭐ 중점
+     → Floating point 수정
+     → Risk Score Dict 반환
+  3. src/config_loader.py (5분) ⭐⭐⭐ 신규
+  4. src/verified_savings.py (10분) ⭐⭐⭐ 신규
+  5. src/models.py (10분) ⭐⭐⭐
+  6. config/governance.yaml (3분) ⭐⭐⭐ 신규
+  7. app.py (10분) ⭐⭐
+  8. 메모 정리 (7분)
+
+⏱️ Day 2 (1시간) - 페이지 통합 확인
+  1. pages/2_성과_리스크_관리.py (15분) ⭐⭐ 중점
+     → Risk Score 처리
+     → 3단계 절감 표시
+  2. pages/4_검증_실증.py (15분) ⭐⭐ 중점
+     → 검증 완료 플로우
+  3. pages/1_에너지_인텔리전스.py (10분) ⭐⭐
+  4. components/ 파일들 (10분) ⭐
+  5. tests/test_analytics.py (10분) ⭐
+  6. 리뷰 코멘트 작성 (10분)
+
+================================
+주요 리뷰 포인트 (v1.1)
+================================
+
+⚠️ Critical (즉시 확인 필요)
+  1. calculate_risk_score 타입 변경 영향
+     - float → Dict 반환
+     - 모든 호출부 확인
+
+  2. 사용자 입력 key 충돌
+     - user_input_page1/2/3/4
+     - 누락 페이지 확인
+
+  3. 검증 완료 버튼 중복 클릭
+     - 중복 저장 방지 로직
+
+✅ 코드 품질
+  - Floating point: round(, 10) 일관성
+  - 타입 변경: Dict 반환 처리
+  - 신규 파일: 구조 적절성
+  - 한글화: UI 라벨 일관성
+
+✅ 에러 처리
+  - YAML 파싱 실패 fallback
+  - latest_yymm None 처리
+  - Parquet I/O 에러
+  - session_state 미초기화
+
+✅ 성능
+  - config 로드 반복 (캐싱?)
+  - risk_scores apply 성능
+  - verified_savings 조회
+
+✅ 비즈니스 로직
+  - Risk Score raw vs display
+  - 검증 완료 플로우 순서
+  - 3단계 절감 기준
+
+================================
+파일 해제 방법
+================================
+
+Windows:
+  1. review.zip 우클릭 → "압축 풀기" 또는 "Extract All"
+  2. 또는 7-Zip, WinRAR 등 압축 프로그램 사용
+
+Linux/Mac:
+  unzip review.zip
+
+================================
+테스트 실행 방법
+================================
+
+1. 의존성 설치:
+   pip install -r requirements.txt
+   
+   ⚠️ 신규 의존성: PyYAML>=6.0
+
+2. 테스트 실행:
+   pytest tests/test_analytics.py -v
+   
+   예상 결과: 24/24 PASSED ✅
+
+3. 앱 실행 (선택):
+   streamlit run app.py
+   
+   확인사항:
+   - 사이드바 "👤 사용자" 입력
+   - 거버넌스 배지 자동 계산
+   - 성과 관리 3단계 절감
+   - 검증 & 실증 "검증 완료로 반영" 버튼
+
+================================
+주요 기능 변경점
+================================
+
+1. 사용자 입력 (모든 페이지)
+   사이드바 → "👤 사용자" → "내 이름" 입력
+   → st.session_state["current_user"]
+   → 모든 Action에 실제 사용자 할당
+
+2. 거버넌스 자동화
+   config/governance.yaml 읽기
+   + bills_df['yymm'].max() 자동 계산
+   → 거버넌스 배지 생성
+
+3. Risk Score 이중 표시
+   raw_score: 실제 KRW 금액
+   display_score: 0~100 비교용
+   → 테이블에 두 컬럼 모두 표시
+
+4. 검증 완료 플로우
+   검증 & 실증 → "검증 완료로 반영" 클릭
+   → verified_savings 저장
+   → Action 생성
+   → 성과 관리 "확정 절감"에 자동 반영
+
+5. 3단계 절감 표시 (성과 관리)
+   💡 예상 절감: 계획/제안 단계
+   🔄 진행 절감: 실행 중
+   ✅ 확정 절감: 검증 완료 (자동 계산)
+
+================================
+문의
+================================
+
+리뷰 가이드: CODE_REVIEW_GUIDE.md 참고 (업데이트됨!)
+프로젝트 문서: README.md, DEPLOYMENT_GUIDE.md 참고
+
+================================
+버전 정보
+================================
+
+이전 버전: v1.0 (55 KB)
+현재 버전: v1.1 (61 KB)
+업데이트: 2025-12-13
+PYLON Project
+
+주요 개선:
+- 7가지 기능 개선
+- 3개 신규 파일
+- 11개 파일 수정
+- 24/24 테스트 통과
+- 완전 한글화
+
+================================
+
+
+
+

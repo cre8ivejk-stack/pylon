@@ -1,0 +1,10 @@
+# PYLON Governance Configuration
+# 거버넌스 설정 파일
+
+official_version: "v2.3"
+plan_locked: true
+exception_applied: 0
+
+
+
+

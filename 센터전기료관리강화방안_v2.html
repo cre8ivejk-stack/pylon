@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>NW센터 에너지 관리 체계 강화 방안 (Final V21)</title>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        :root {
+            /* Colors */
+            --vis-color: #7d3c98; /* #1 보라 */
+            --red-color: #27ae60; /* #2 초록 */
+            --cost-color: #2980b9; /* #3 파랑 */
+            
+            --bg-gray: #f8f9fa;
+            --text-dark: #2c3e50;
+            --radius: 8px;
+        }
+
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #e0e0e0;
+            margin: 0;
+            padding: 30px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 1400px;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* HEADER */
+        header {
+            text-align: center;
+            border-bottom: 2px solid var(--text-dark);
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+        }
+        h1 { margin: 0; color: var(--text-dark); font-size: 2.2rem; letter-spacing: -1px; }
+        .sub-header { margin-top: 5px; color: #7f8c8d; font-size: 1rem; }
+
+        /* STRATEGY GRID */
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 0.95fr 0.95fr;
+            gap: 20px;
+            align-items: stretch;
+        }
+
+        .col-box {
+            border: 1px solid #ddd;
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .col-head { color: white; padding: 15px; text-align: center; }
+        .h-1 { background: var(--vis-color); }
+        .h-2 { background: var(--red-color); }
+        .h-3 { background: var(--cost-color); }
+        
+        .head-title { font-size: 1.3rem; font-weight: 800; display: block; margin-bottom: 4px; }
+        .head-desc { font-size: 0.85rem; opacity: 0.9; font-weight: 300; }
+
+        .col-body {
+            padding: 20px;
+            background: #fff;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* --- Direction #1 (PYLON Badge Style) --- */
+        .process-flow { display: flex; flex-direction: column; gap: 0; }
+        .p-step { display: flex; position: relative; padding-bottom: 25px; align-items: flex-start; }
+        .p-step:last-child { padding-bottom: 0; }
+        
+        .p-line { position: absolute; left: 14px; top: 28px; bottom: 0; width: 2px; background: #e0e0e0; z-index: 0; }
+        .p-step:last-child .p-line { display: none; }
+        .p-arrow { position: absolute; left: 10px; bottom: 8px; font-size: 10px; color: #ccc; z-index: 1; }
+        
+        .p-num {
+            width: 30px; height: 30px; background: #bbb; color: white;
+            border-radius: 50%; font-weight: bold; font-size: 0.9rem;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 2; margin-right: 12px; flex-shrink: 0;
+        }
+        .p-num.key { background: var(--vis-color); box-shadow: 0 2px 5px rgba(125, 60, 152, 0.4); }
+
+        .p-content { flex-grow: 1; }
+        .p-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+        .p-title { font-size: 1rem; font-weight: 800; color: #777; }
+        .p-title.key { color: var(--vis-color); }
+        .p-desc-inline { font-size: 0.85rem; color: #555; font-weight: 600; }
+
+        /* PYLON BADGE */
+        .badge-pylon-styled {
+            background: #f3e5f5; border: 1px solid var(--vis-color); color: var(--vis-color);
+            padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 800;
+            display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+            box-shadow: 0 2px 4px rgba(142, 68, 173, 0.2);
+        }
+
+        .p-detail { font-size: 0.8rem; color: #666; line-height: 1.4; margin: 0; padding-left: 0; list-style: none; }
+        .p-detail li { position: relative; padding-left: 8px; margin-bottom: 2px; }
+        .p-detail li::before { content: "-"; position: absolute; left: 0; color: #999; }
+
+        /* --- Direction #2 --- */
+        .task-group-title { font-weight: bold; color: var(--red-color); margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 4px; }
+        .task-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .task-badge {
+            background: #f8f9fa; border: 1px solid #ddd; color: #777;
+            padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;
+            display: inline-flex; align-items: center; gap: 5px; width: fit-content;
+        }
+        .task-badge.key {
+            background: #e8f5e9; border-color: var(--red-color); color: var(--red-color); box-shadow: 0 2px 4px rgba(39, 174, 96, 0.2);
+        }
+        .check-icon { font-size: 1rem; font-weight: bold; }
+
+        /* --- Direction #3 --- */
+        .cost-item { margin-bottom: 15px; }
+        .cost-head { font-weight: 800; color: #777; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-size: 0.95rem;}
+        
+        .cost-badge-key {
+            background: #eef6fb; border: 1px solid var(--cost-color); color: var(--cost-color);
+            padding: 8px 15px; border-radius: 25px; font-size: 0.9rem; font-weight: 700;
+            display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(41, 128, 185, 0.2);
+            margin-bottom: 5px; width: fit-content;
+        }
+        
+        .cost-annotation {
+            font-size: 0.75rem; color: #888; margin-left: 10px; margin-bottom: 8px; font-style: italic;
+        }
+
+        .cost-sub { 
+            background: #f8f9fa; border-radius: 6px; padding: 10px; 
+            font-size: 0.85rem; color: #444; line-height: 1.5; border-left: 3px solid #ccc;
+        }
+        .clean-list { margin: 0; padding-left: 10px; list-style: none; }
+        .clean-list li { margin-bottom: 3px; font-weight: 500; }
+        .clean-list li strong { font-weight: 700; color: #333; }
+
+        /* Team Role */
+        .team-role {
+            margin-top: auto; background: var(--bg-gray); border-top: 3px solid #ccc;
+            padding: 12px 15px; border-radius: 0 0 var(--radius) var(--radius);
+        }
+        .role-header { font-size: 0.85rem; font-weight: 800; color: #555; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .role-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+        .role-card {
+            background: white; border: 1px solid #ddd; padding: 6px 10px; border-radius: 6px;
+            font-size: 0.8rem; font-weight: 600; color: #333; display: flex; align-items: center; gap: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); line-height: 1.2;
+        }
+        .rc-icon { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .rc-1 .rc-icon { background: var(--vis-color); }
+        .rc-2 .rc-icon { background: var(--red-color); }
+        .rc-3 .rc-icon { background: var(--cost-color); }
+
+
+        /* --- 4 MAJOR PROJECTS (TIMELINE) --- */
+        .project-section {
+            border: 2px solid #2c3e50; border-radius: var(--radius); padding: 25px; background: #fff;
+        }
+        .sec-title { font-size: 1.2rem; font-weight: 800; color: #2c3e50; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+        
+        .timeline-header {
+            display: flex; width: 68%; font-size: 0.8rem; color: #999; font-weight: bold;
+            border-bottom: 1px solid #ccc; padding-bottom: 5px;
+        }
+        .th-26 { flex: 0 0 60%; display: flex; border-right: 1px dashed #eee; }
+        .th-q { flex: 1; text-align: center; border-right: 1px dashed #eee; font-size: 0.75rem;}
+        .th-yr { flex: 0 0 20%; text-align: center; border-right: 1px dashed #eee; }
+        
+        .gantt-row { display: flex; align-items: flex-start; border-bottom: 1px dashed #eee; padding: 15px 0; }
+        .gantt-row:last-child { border-bottom: none; }
+        .g-info { width: 32%; padding-right: 20px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; min-height: 40px; }
+        .g-title { font-size: 0.95rem; font-weight: 800; color: #2c3e50; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+        .g-num { background: #2c3e50; color: white; width: 20px; height: 20px; border-radius: 4px; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; }
+        .g-team { font-size: 0.75rem; color: #666; margin-bottom: 2px; }
+        /* Expected Effect Style */
+        .g-effect { font-size: 0.75rem; color: #e74c3c; font-weight: bold; margin-top: 3px; }
+        
+        .g-track-container { width: 68%; display: flex; flex-direction: column; gap: 8px; position: relative; }
+        .g-track { position: relative; height: 36px; display: flex; align-items: center; background: #f8f9fa; border-radius: 4px; border: 1px solid #eee; }
+        
+        /* Grid Lines */
+        .g-grid-line { position: absolute; top: -10px; bottom: 0; width: 1px; background: rgba(0,0,0,0.05); z-index: 0; height: 120%;}
+        .gl-1 { left: 15%; } .gl-2 { left: 30%; } .gl-3 { left: 45%; } 
+        .gl-4 { left: 60%; border-left: 2px solid rgba(0,0,0,0.15); } 
+        .gl-5 { left: 80%; }
+
+        .milestone { position: absolute; display: flex; flex-direction: column; align-items: center; z-index: 2; transform: translateX(-50%); }
+        .ms-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 2px solid #3498db; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2px; }
+        
+        /* Arrow Bar */
+        .ms-bar {
+            height: 18px; background: #aed6f1; position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+            border: 1px solid #3498db; display: flex; align-items: center; justify-content: center;
+            font-size: 0.55rem; color: #154360; font-weight: bold; white-space: nowrap; overflow: hidden;
+            clip-path: polygon(0% 0%, 95% 0%, 100% 50%, 95% 100%, 0% 100%); padding-right: 5px; box-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .ms-dot.final { border-color: #2ecc71; background: #2ecc71; }
+        .ms-dot.start { border-color: #e74c3c; }
+        .ms-label {
+            font-size: 0.6rem; color: #333; white-space: nowrap; font-weight: 600; text-align: center;
+            background: rgba(255,255,255,0.95); padding: 1px 4px; border-radius: 3px; border: 1px solid #ccc; z-index: 3;
+        }
+        .ms-date { font-size: 0.6rem; color: #e74c3c; font-weight: bold; margin-bottom: 1px; }
+
+        
+        /* --- GOVERNANCE --- */
+        .gov-section { background: #f4f6f8; border-radius: var(--radius); padding: 0; border: 1px solid #ddd; overflow: hidden; }
+        .wg-header { background: #2c3e50; color: white; padding: 12px 25px; display: flex; justify-content: space-between; align-items: center; }
+        .wg-title { font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+        .wg-legend { display: flex; gap: 15px; }
+        .wg-legend-item { font-size: 0.8rem; color: #ecf0f1; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+        .gl-icon { color: #f1c40f; }
+
+        .gov-body { padding: 20px 25px; display: flex; gap: 20px; align-items: center; justify-content: space-between; }
+        .gov-left-block { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; }
+        .wg-box { border: 2px dashed var(--vis-color); background: #fff; border-radius: 8px; padding: 15px; position: relative; }
+        .wg-label { position: absolute; top: -12px; left: 15px; background: #fff; padding: 0 10px; color: var(--vis-color); font-weight: 800; font-size: 0.85rem; border: 2px dashed var(--vis-color); border-radius: 12px; }
+        .link-badge { position: absolute; top: -10px; right: 15px; color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .lb-wg { background: var(--vis-color); }
+        .lb-gen { background: #34495e; }
+        .wg-content-row { display: flex; gap: 15px; margin-top: 5px; }
+        
+        .gen-box { background: #fdfdfd; border: 1px solid #ccc; border-radius: 8px; padding: 15px; position: relative; }
+        .gen-label { position: absolute; top: -12px; left: 15px; background: #fdfdfd; padding: 0 10px; color: #7f8c8d; font-weight: 800; font-size: 0.85rem; border: 1px solid #ccc; border-radius: 12px; }
+        .gen-content { display: flex; justify-content: space-around; align-items: center; font-size: 0.85rem; color: #555; font-weight: 600; margin-top: 5px; }
+
+        .module-col { flex: 1; border-radius: 8px; border: 1px solid #ccc; background: #f9f9f9; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+        .mc-header { padding: 8px; text-align: center; font-weight: 800; color: white; border-radius: 7px 7px 0 0; font-size: 0.9rem; }
+        .mc-sys .mc-header { background: #3498db; }
+        .mc-exec .mc-header { background: #27ae60; }
+        .mc-content { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
+        .map-box { background: #fff; border: 1px solid #eee; border-radius: 4px; padding: 8px; font-size: 0.8rem; color: #333; }
+        .map-box strong { display: block; margin-bottom: 3px; font-weight: 700; color: #000; }
+        .map-list { margin: 0; padding-left: 15px; font-size: 0.75rem; color: #555; }
+        .team-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 8px; border-top: 1px dashed #eee; }
+        .team-tag { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; color: #555; font-weight: bold; }
+
+        .gov-arrow-col { display: flex; align-items: center; justify-content: center; width: 50px; }
+        .output-arrow { font-size: 2.5rem; color: #bdc3c7; font-weight: bold; }
+        .gov-right-col { width: 140px; display: flex; align-items: center; }
+        .gov-output { width: 100%; background: #2c3e50; color: white; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-weight: 800; padding: 20px 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+
+        /* FOOTER */
+        .roadmap-footer { background: #2c3e50; color: white; border-radius: var(--radius); padding: 20px 30px; display: flex; align-items: center; box-shadow: 0 5px 15px rgba(44, 62, 80, 0.4); }
+        .rm-title { font-size: 1.3rem; font-weight: 800; width: 140px; border-right: 2px solid rgba(255,255,255,0.2); margin-right: 30px; line-height: 1.2; }
+        .rm-steps { flex-grow: 1; display: flex; justify-content: space-between; position: relative; }
+        .rm-step { width: 32%; position: relative; }
+        .arrow-icon { position: absolute; right: -15px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.2); font-size: 1.5rem; }
+        .year-label { color: #3498db; font-weight: 800; font-size: 1.1rem; display: block; margin-bottom: 5px; }
+        .year-desc { font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; opacity: 0.95; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <header>
+            <h1>NW센터 에너지 관리 체계 강화 방안</h1>
+            <div class="sub-header">2026 ~ 2028 Strategic Plan & Action Items</div>
+        </header>
+
+        <div class="strategy-grid">
+            
+            <div class="col-box">
+                <div class="col-head h-1">
+                    <span class="head-title">#1. 가시성 & 성과관리</span>
+                    <span class="head-desc">AT/DT 기반 운영 최적화 체계 구축</span>
+                </div>
+                <div class="col-body">
+                    <div class="process-flow">
+                        <div class="p-step">
+                            <div class="p-line"></div>
+                            <div class="p-num key">1</div>
+                            <div class="p-content">
+                                <div class="p-header">
+                                    <span class="p-title key">DT (Data & Pipeline)</span>
+                                    <span class="badge-pylon-styled"><span class="check-icon">✔</span>PYLON</span>
+                                </div>
+                                <span class="p-desc-inline">데이터 수집 체계 구축</span>
+                                <ul class="p-detail">
+                                    <li>(Acc) 5G 전 장비, LTE(E/N) 수집</li>
+                                    <li>(Core) HOLA/SIMS 활용 수집체계 검토</li>
+                                    <li>신규 장비 RFP 데이터 요구사항 반영</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="p-step">
+                            <div class="p-line"></div>
+                            <div class="p-arrow">▼</div>
+                            <div class="p-num">2</div>
+                            <div class="p-content">
+                                <div class="p-header">
+                                    <span class="p-title">검증 (Validation)</span>
+                                </div>
+                                <span class="p-desc-inline">절감 효과성 검증/실증</span>
+                                <ul class="p-detail">
+                                    <li>솔루션 적용 전/후 효과 비교 분석</li>
+                                    <li>기대효과 미달 시 개선 Drive</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="p-step">
+                            <div class="p-line"></div>
+                            <div class="p-arrow">▼</div>
+                            <div class="p-num key">3</div>
+                            <div class="p-content">
+                                <div class="p-header">
+                                    <span class="p-title key">모니터링 (Monitoring)</span>
+                                    <span class="badge-pylon-styled"><span class="check-icon">✔</span>PYLON</span>
+                                </div>
+                                <span class="p-desc-inline">현황 분석 및 비교</span>
+                                <ul class="p-detail">
+                                    <li>(내부) 본부/벤더/권역별 비교</li>
+                                    <li>(외부) Peer 비교 (DT, NTT, T-Mobile)</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="p-step">
+                            <div class="p-num">4</div>
+                            <div class="p-content">
+                                <div class="p-header">
+                                    <span class="p-title">성과 & Risk 관리</span>
+                                </div>
+                                <span class="p-desc-inline">KPI 및 ESG 대응</span>
+                                <ul class="p-detail">
+                                    <li>예산/실적 및 탄소 배출량 관리</li>
+                                    <li>절감 과제별 정량 성과 측정</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="team-role role-1">
+                    <div class="role-header">⚡ NW ESG추진팀 역할</div>
+                    <div class="role-grid">
+                        <div class="role-card rc-1"><div class="rc-icon"></div>Data Pipeline/대시보드 기획</div>
+                        <div class="role-card rc-1"><div class="rc-icon"></div>과제 단위 성과 측정/관리</div>
+                        <div class="role-card rc-1"><div class="rc-icon"></div>일하는 방식 개선 (AI 에너지 Agent)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-box">
+                <div class="col-head h-2">
+                    <span class="head-title">#2. 에너지 소모 절감</span>
+                    <span class="head-desc">kWh 절대량 감소 핵심 과제</span>
+                </div>
+                <div class="col-body">
+                    <div>
+                        <div class="task-group-title">Access (망 진화)</div>
+                        <div class="task-container">
+                            <div class="task-badge">LTE Mod.</div>
+                            <div class="task-badge">3G F/O</div>
+                            <div class="task-badge">SA 전환</div>
+                            <div class="task-badge">E-Project</div>
+                            <div class="task-badge">Power Saving</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="task-group-title">설비 (핵심 인프라)</div>
+                        <div class="task-container">
+                            <div class="task-badge key"><span class="check-icon">✔</span>필름형 태양광</div>
+                            <div class="task-badge key"><span class="check-icon">✔</span>외기 냉방 도입</div>
+                            <div class="task-badge">노후 냉방기 대개체</div>
+                            <div class="task-badge">국사 온도 상향</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="task-group-title">Core / 전송</div>
+                        <div class="task-container">
+                            <div class="task-badge">F/H Zero Power</div>
+                            <div class="task-badge">서버 P/S</div>
+                            <div class="task-badge">유휴 시설 재배치</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="team-role role-2">
+                    <div class="role-header">⚡ NW ESG추진팀 역할</div>
+                    <div class="role-grid">
+                        <div class="role-card rc-2" style="grid-column: span 1;"><div class="rc-icon"></div>NW망진화/Slim화 에너지 PM (TCO평가/실증 주관)</div>
+                        <div class="role-card rc-2" style="grid-column: span 1;"><div class="rc-icon"></div>신규 솔루션 발굴/검증</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-box">
+                <div class="col-head h-3">
+                    <span class="head-title">#3. 비용 최적화</span>
+                    <span class="head-desc">단가 인하 & 누수 Zero</span>
+                </div>
+                <div class="col-body">
+                    <div class="cost-item">
+                        <div class="cost-head key">건물 / 한전 정액 계약</div>
+                        
+                        <div class="cost-badge-key"><span class="check-icon">✔</span>시험성적서 Modernization</div>
+                        <div class="cost-annotation">※ 광중계기 20종 우선 검토</div>
+                        
+                        <div class="cost-sub key">
+                            <ul class="clean-list">
+                                <li><strong>LTE 사용률</strong> : 35% → 10%</li>
+                                <li><strong>Power Saving</strong> : All Time On</li>
+                                <li><strong>기타</strong> : 고효율 Amp 적용, 3G Off 반영</li>
+                            </ul>
+                        </div>
+                        
+                        <div style="margin-top:12px;">
+                            <div class="task-badge">모자분리 (건물) 실행</div>
+                        </div>
+                    </div>
+                    
+                    <hr style="border:0; border-top:1px dashed #ddd; margin:10px 0;">
+
+                    <div class="cost-item">
+                        <div class="cost-head">한전 종량 계약</div>
+                        <div class="cost-sub">
+                            <ul class="clean-list">
+                                <li>RAPA 수수료 현실화</li>
+                                <li>요금제 최적화 (주택 ↔ 일반)</li>
+                                <li>도전(Power Theft) 탐지/해소</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="team-role role-3">
+                    <div class="role-header">⚡ NW ESG추진팀 역할</div>
+                    <div class="role-grid">
+                        <div class="role-card rc-3"><div class="rc-icon"></div>시험성적서 Mod. (3G F/O 연계)</div>
+                        <div class="role-card rc-3"><div class="rc-icon"></div>전기요금 누수 Zero화</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="project-section">
+            <div class="sec-title">
+                <span>🎯 4대 중점 추진 과제 & Timeline</span>
+                <div class="timeline-header">
+                    <div class="th-26">
+                        <div class="th-q">26.1Q</div><div class="th-q">2Q</div><div class="th-q">3Q</div><div class="th-q">4Q</div>
+                    </div>
+                    <div class="th-yr">2027</div>
+                    <div class="th-yr" style="border:none;">2028</div>
+                </div>
+            </div>
+
+            <div class="gantt-row">
+                <div class="g-info">
+                    <div class="g-title"><div class="g-num">1</div>PYLON (대시보드 & 에너지 에이전트)</div>
+                    <div class="g-team"><strong>Collab:</strong> NW AT/DT, 지역 AT/DT, 지역 O/I, NW ESG</div>
+                    <div class="g-effect">Effect: 데이터 기반 의사결정 체계 확보</div>
+                </div>
+                <div class="g-track-container">
+                    <div class="g-track">
+                        <span style="position:absolute; left:2px; font-size:0.6rem; color:#2980b9; font-weight:bold;">DB</span>
+                        <div class="g-grid-line gl-1"></div><div class="g-grid-line gl-2"></div><div class="g-grid-line gl-3"></div><div class="g-grid-line gl-4"></div><div class="g-grid-line gl-5"></div>
+                        <div class="milestone" style="left: 30%;"><span class="ms-date">'26.6</span><div class="ms-dot start"></div><span class="ms-label">Phase I (내부)</span></div>
+                        <div class="milestone" style="left: 60%;"><span class="ms-date">'26.12</span><div class="ms-dot"></div><span class="ms-label">Phase II (외부)</span></div>
+                        <div class="ms-bar" style="left:60%; width:20%;">그룹TF연계</div>
+                        <div class="ms-bar" style="left:80%; width:20%;">고도화</div>
+                    </div>
+                    <div class="g-track">
+                        <span style="position:absolute; left:2px; font-size:0.6rem; color:#8e44ad; font-weight:bold;">Ag.</span>
+                        <div class="g-grid-line gl-1"></div><div class="g-grid-line gl-2"></div><div class="g-grid-line gl-3"></div><div class="g-grid-line gl-4"></div><div class="g-grid-line gl-5"></div>
+                        <div class="milestone" style="left: 10%;"><span class="ms-date">'26.1</span><div class="ms-dot start"></div><span class="ms-label">Pilot</span></div>
+                        <div class="milestone" style="left: 30%;"><span class="ms-date">'26.6</span><div class="ms-dot"></div><span class="ms-label">전국 확대</span></div>
+                        <div class="milestone" style="left: 60%;"><span class="ms-date">'26.12</span><div class="ms-dot"></div><span class="ms-label">인빌딩</span></div>
+                        <div class="ms-bar" style="left:60%; width:20%;">유선/Core</div>
+                        <div class="ms-bar" style="left:80%; width:20%;">설비</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gantt-row">
+                <div class="g-info">
+                    <div class="g-title"><div class="g-num">2</div>시험성적서 Modernization</div>
+                    <div class="g-team"><strong>Collab:</strong> Acc. Eng, Acc. Sol</div>
+                    <div class="g-effect">Effect: 연 20~40억 절감 예상</div>
+                </div>
+                <div class="g-track-container">
+                    <div class="g-track">
+                        <div class="g-grid-line gl-1"></div><div class="g-grid-line gl-2"></div><div class="g-grid-line gl-3"></div><div class="g-grid-line gl-4"></div><div class="g-grid-line gl-5"></div>
+                        <div class="milestone" style="left: 15%;"><span class="ms-date">1Q</span><div class="ms-dot start"></div><span class="ms-label">대상/방법 확정</span></div>
+                        <div class="milestone" style="left: 30%;"><span class="ms-date">2Q</span><div class="ms-dot"></div><span class="ms-label">성적서 확보</span></div>
+                        <div class="ms-bar" style="left:30%; width:50%;">신규(즉시)</div>
+                        <div class="ms-bar" style="left:80%; width:20%;">3G F/O 재협상</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gantt-row">
+                <div class="g-info">
+                    <div class="g-title"><div class="g-num">3</div>외기 냉방 도입 (Dual)</div>
+                    <div class="g-team"><strong>Collab:</strong> 유선/설비 Eng, 구축계획팀</div>
+                    <div class="g-effect">Effect: 연 5~45억 절감 예상</div>
+                </div>
+                <div class="g-track-container">
+                    <div class="g-track" style="height:30px; background:#eef6fb;">
+                        <span style="position:absolute; left:2px; font-size:0.6rem; color:#2980b9; font-weight:bold;">Mod.</span>
+                        <div class="g-grid-line gl-1"></div><div class="g-grid-line gl-2"></div><div class="g-grid-line gl-3"></div><div class="g-grid-line gl-4"></div><div class="g-grid-line gl-5"></div>
+                        <div class="milestone" style="left:15%;"><span class="ms-date">'26.3</span><span class="ms-label">검토</span></div>
+                        <div class="milestone" style="left:20%;"><span class="ms-date">'26.4</span><span class="ms-label">PoC준비</span></div>
+                        <div class="milestone" style="left:45%;"><span class="ms-date">'26.10</span><span class="ms-label">PoC/모니터링</span></div>
+                        <div class="ms-bar" style="left:60%; width:20%;">100국</div>
+                        <div class="ms-bar" style="left:80%; width:20%;">전체</div>
+                    </div>
+                    <div class="g-track" style="height:30px; background:#fbeeee;">
+                        <span style="position:absolute; left:2px; font-size:0.6rem; color:#c0392b; font-weight:bold;">Agg.</span>
+                        <div class="g-grid-line gl-1"></div><div class="g-grid-line gl-2"></div><div class="g-grid-line gl-3"></div><div class="g-grid-line gl-4"></div><div class="g-grid-line gl-5"></div>
+                        <div class="milestone" style="left:5%;"><span class="ms-date">'26.1</span><span class="ms-label">발주</span></div>
+                        <div class="milestone" style="left:10%;"><span class="ms-date">'26.2</span><span class="ms-label">PoC</span></div>
+                        <div class="milestone" style="left:37%;"><span class="ms-date">'26.8</span><span class="ms-label">30국</span></div>
+                        <div class="ms-bar" style="left:40%; width:40%;">300국</div>
+                        <div class="ms-bar" style="left:80%; width:20%;">전체</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="gantt-row">
+                <div class="g-info">
+                    <div class="g-title"><div class="g-num">4</div>필름형 태양광</div>
+                    <div class="g-team"><strong>Collab:</strong> 구축계획팀, Net. 협력팀</div>
+                    <div class="g-effect">Effect: 최대 100억 이상 절감 잠재력</div>
+                </div>
+                <div class="g-track-container">
+                    <div class="g-track">
+                        <div class="g-grid-line gl-1"></div><div class="g-grid-line gl-2"></div><div class="g-grid-line gl-3"></div><div class="g-grid-line gl-4"></div><div class="g-grid-line gl-5"></div>
+                        <div class="milestone" style="left: 15%;"><span class="ms-date">'26.3</span><div class="ms-dot start"></div><span class="ms-label">소재</span></div>
+                        <div class="milestone" style="left: 18%;"><span class="ms-date">'26.4</span><div class="ms-dot"></div><span class="ms-label">SA시험</span></div>
+                        <div class="milestone" style="left: 22%;"><span class="ms-date">'26.5</span><div class="ms-dot"></div><span class="ms-label">공법/Site</span></div>
+                        <div class="milestone" style="left: 28%;"><span class="ms-date">'26.6</span><div class="ms-dot"></div><span class="ms-label">구축</span></div>
+                        <div class="milestone" style="left: 32%;"><span class="ms-date">'26.7~</span><div class="ms-dot"></div><span class="ms-label">PoC검증</span></div>
+                        <div class="ms-bar" style="left:60%; width:40%;">본격 확산</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="gov-section">
+            <div class="wg-header">
+                <div class="wg-title">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    전기료 WG (Working Group)
+                </div>
+                <div class="wg-legend">
+                    <div class="wg-legend-item"><span class="gl-icon">⚡</span> 팀장/실무급 상시 Comm.</div>
+                    <div class="wg-legend-item"><span class="gl-icon">💻</span> 실행 First (월 1회 실적 점검)</div>
+                </div>
+            </div>
+            
+            <div class="gov-body">
+                
+                <div class="gov-left-block">
+                    <div class="wg-box">
+                        <div class="wg-label">전기료 WG (Working Group)</div>
+                        <div class="link-badge lb-wg">Link: 방향성 #1 (가시성/성과관리)</div>
+                        
+                        <div class="wg-content-row">
+                            <div class="module-col mc-sys">
+                                <div class="mc-header">시스템 모듈 (기획/제작)</div>
+                                <div class="mc-content">
+                                    <div class="map-box">
+                                        <strong>[과제 1] PYLON</strong>
+                                        <span style="font-size:0.75rem; color:#666;">대시보드 / 에너지 Agent</span>
+                                    </div>
+                                    <div class="team-row">
+                                        <span class="team-tag">NW AT/DT</span>
+                                        <span class="team-tag">지역 AT/DT</span>
+                                        <span class="team-tag">지역 O/I</span>
+                                        <span class="team-tag">NW ESG</span>
+                                        <span class="team-tag">NW O/I</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="module-col mc-exec">
+                                <div class="mc-header">실행 모듈 (추진/실적)</div>
+                                <div class="mc-content">
+                                    <div class="map-box">
+                                        <strong>[과제 2, 3, 4] 4대 중점 과제</strong>
+                                        <ul class="map-list"><li>시험성적서 / 외기 냉방 / 태양광</li></ul>
+                                    </div>
+                                    <div class="team-row">
+                                        <span class="team-tag">NW ESG</span>
+                                        <span class="team-tag">NW O/I</span>
+                                        <span class="team-tag">지역 O/I</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="gen-box">
+                        <div class="gen-label">일반 과제</div>
+                        <div class="link-badge lb-gen">Link: 방향성 #2, #3 (절감/비용)</div>
+                        <div class="gen-content">
+                            <span>Access 망 진화</span>
+                            <span>설비 고효율화</span>
+                            <span>한전 계약 최적화</span>
+                            <span>RAPA / 도전 관리</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="gov-arrow-col">
+                    <div class="output-arrow">➔</div>
+                </div>
+
+                <div class="gov-right-col">
+                    <div class="gov-output">
+                        <div style="font-size:0.8rem; opacity:0.8; margin-bottom:5px;">Output For</div>
+                        <div style="font-size:1.2rem;">O/I<br>회의체</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="roadmap-footer">
+            <div class="rm-title">3-Year Goal</div>
+            <div class="rm-steps">
+                <div class="rm-step">
+                    <span class="year-label">'26년 (Inflection Point)</span>
+                    <span class="year-desc">전력 사용량/비용 증분 Zero화<br>관리 대시보드 구현 및 안정화</span>
+                    <div class="arrow-icon">▶</div>
+                </div>
+                <div class="rm-step">
+                    <span class="year-label">'27년 (Turn Down)</span>
+                    <span class="year-desc">Down Trend 전환 시작<br>그룹 에너지 효율화 <strong>'1등급'</strong> 달성</span>
+                    <div class="arrow-icon">▶</div>
+                </div>
+                <div class="rm-step">
+                    <span class="year-label">'28년~ (Acceleration)</span>
+                    <span class="year-desc">전력 사용량 <strong>20% 이상 감소</strong><br>3G 완전 철거 연계 가속화</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

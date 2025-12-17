@@ -23,9 +23,16 @@ from src.config_loader import load_governance_config
 from components.global_controls import render_sidebar_filters, render_governance_badges, apply_filters, render_filter_summary
 from components.widget_card import render_widget_card, render_simple_metric_card
 from components.action_inbox import render_compact_action_inbox
+from styles import (
+    PYLON_BLUE, PYLON_GREEN, PYLON_ORANGE,
+    apply_page_style, create_footer
+)
 
 # Page config
 st.set_page_config(page_title="최적화 & 실행 | PYLON", layout="wide", page_icon="🎯")
+
+# Apply PYLON brand colors
+st.markdown(apply_page_style(), unsafe_allow_html=True)
 
 # Initialize
 data_dir = Path("data")
@@ -33,8 +40,8 @@ dal = DataAccessLayer(data_dir)
 action_manager = ActionManager(data_dir)
 gov_config = load_governance_config()
 
-# Header
-st.title("🎯 PYLON - 최적화 & 실행")
+# Header with brand color
+st.markdown(f'<h1 style="color: {PYLON_BLUE};">🎯 PYLON - 최적화 & 실행</h1>', unsafe_allow_html=True)
 st.markdown("계약전력 최적화, 요금제 변경, 이상 탐지")
 
 # User and system status in sidebar
@@ -146,8 +153,8 @@ with tab1:
             
             st.markdown("---")
             
-            # Reduction opportunities
-            st.markdown("### 🔽 감설 권고 국소")
+            # Reduction opportunities: GREEN for savings/optimization
+            st.markdown(f'<h3 style="color: {PYLON_GREEN};">🔽 감설 권고 국소</h3>', unsafe_allow_html=True)
             
             reduction_df = opt_df[opt_df['savings_est'] > 0].sort_values('savings_est', ascending=False)
             
@@ -330,11 +337,6 @@ with tab3:
     else:
         st.success("✅ 사용량 0 국소가 없습니다.")
 
-# Footer
-st.divider()
-st.markdown("""
-<div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p><strong>PYLON v0.0.3 (Dev) | SKT Network ESG추진팀</strong></p>
-</div>
-""", unsafe_allow_html=True)
+# Footer with PYLON branding
+st.markdown(create_footer(), unsafe_allow_html=True)
 

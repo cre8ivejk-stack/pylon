@@ -14,6 +14,10 @@ from components.global_controls import render_governance_badges
 from components.action_inbox import render_action_inbox
 from components.strategy_overview import render_strategy_overview
 from components.key_initiatives import render_key_initiatives
+from styles import (
+    PYLON_BLUE, PYLON_GREEN, PYLON_ORANGE, PYLON_TEXT, PYLON_BORDER,
+    apply_page_style, create_footer
+)
 
 # Page configuration
 st.set_page_config(
@@ -46,33 +50,68 @@ gov_config = load_governance_data()
 latest_yymm = bills_df['yymm'].max() if len(bills_df) > 0 else None
 governance_badge = GovernanceBadge.create_from_config_and_data(gov_config, latest_yymm)
 
-# Custom CSS for better UI
-st.markdown("""
+# Apply PYLON brand colors with enhanced styling
+st.markdown(apply_page_style(), unsafe_allow_html=True)
+
+# Custom CSS for app-specific styling - ENHANCED FOR VISIBILITY
+st.markdown(f"""
 <style>
-    .main-header {
+    /* Main header with gradient background */
+    .main-header {{
         font-size: 3rem;
         font-weight: bold;
-        color: #1f77b4;
+        color: white;
+        background: linear-gradient(135deg, {PYLON_BLUE} 0%, #2d5986 100%);
         text-align: center;
-        padding: 1rem 0;
-    }
-    .subtitle {
+        padding: 2rem 0;
+        margin: -1rem -1rem 2rem -1rem;
+        box-shadow: 0 4px 12px rgba(31, 58, 95, 0.3);
+    }}
+    .subtitle {{
         font-size: 1.2rem;
         text-align: center;
-        color: #666;
+        color: {PYLON_TEXT};
         margin-bottom: 2rem;
-    }
-    .feature-card {
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        font-weight: 600;
+    }}
+    
+    /* Streamlit metric styling */
+    [data-testid="stMetricValue"] {{
+        color: {PYLON_BLUE};
+        font-weight: bold;
+    }}
+    
+    /* Streamlit buttons */
+    .stButton > button {{
+        background-color: {PYLON_BLUE};
         color: white;
-        margin-bottom: 1rem;
-    }
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s;
+    }}
+    
+    .stButton > button:hover {{
+        background-color: #2d5986;
+        box-shadow: 0 4px 12px rgba(31, 58, 95, 0.3);
+    }}
+    
+    /* Page links styling */
+    .stPageLink {{
+        background-color: {PYLON_BLUE}10 !important;
+        border-left: 4px solid {PYLON_BLUE} !important;
+        border-radius: 0 8px 8px 0 !important;
+        padding: 0.75rem 1rem !important;
+    }}
+    
+    .stPageLink:hover {{
+        background-color: {PYLON_BLUE}20 !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
-# Header
+# Header with prominent styling
 st.markdown('<div class="main-header">⚡ PYLON</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">SKT Network센터 에너지 관리 운영 플랫폼</div>', unsafe_allow_html=True)
 
@@ -144,7 +183,8 @@ with col2:
     with col_b:
         st.metric("완료", action_stats['done'])
         if action_stats['overdue'] > 0:
-            st.metric("⚠️ 지연", action_stats['overdue'])
+            # Risk indicator: use PYLON_ORANGE for overdue items
+            st.markdown(f'<div style="color: {PYLON_ORANGE}; font-weight: bold;">⚠️ 지연: {action_stats["overdue"]}</div>', unsafe_allow_html=True)
         else:
             st.metric("✅ 지연", 0)
 
@@ -228,11 +268,6 @@ with st.expander("📁 데이터 소스 관리"):
                 st.success("✅ 데이터 업로드 완료! 페이지를 새로고침하세요.")
                 st.rerun()
 
-# Footer
-st.divider()
-st.markdown("""
-<div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p><strong>PYLON v0.0.3 (Dev) | SKT Network ESG추진팀</strong></p>
-</div>
-""", unsafe_allow_html=True)
+# Footer with PYLON branding
+st.markdown(create_footer(), unsafe_allow_html=True)
 

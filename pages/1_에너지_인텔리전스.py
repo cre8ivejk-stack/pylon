@@ -25,9 +25,15 @@ from src.config_loader import load_governance_config
 from components.global_controls import render_sidebar_filters, render_governance_badges, apply_filters, render_filter_summary
 from components.widget_card import render_widget_card, render_simple_metric_card
 from components.action_inbox import render_compact_action_inbox
+from styles import (
+    PYLON_BLUE, PYLON_ORANGE, apply_page_style, create_footer
+)
 
 # Page config
 st.set_page_config(page_title="에너지 인텔리전스 | PYLON", layout="wide", page_icon="⚡")
+
+# Apply PYLON brand colors
+st.markdown(apply_page_style(), unsafe_allow_html=True)
 
 # Initialize
 data_dir = Path("data")
@@ -37,8 +43,8 @@ action_manager = ActionManager(data_dir)
 # Load governance config
 gov_config = load_governance_config()
 
-# Header
-st.title("⚡ PYLON - Energy Intelligence")
+# Header with brand color
+st.markdown(f'<h1 style="color: {PYLON_BLUE};">⚡ PYLON - Energy Intelligence</h1>', unsafe_allow_html=True)
 st.markdown("에너지 사용 현황 분석 및 계획 대비 실적 모니터링")
 
 # User and system status in sidebar
@@ -314,8 +320,8 @@ with tab3:
             )
             st.plotly_chart(fig_pie, use_container_width=True)
         
-        # Problem sites requiring action
-        st.markdown("### ⚠️ 조사 필요 국소")
+        # Problem sites requiring action - ORANGE for attention needed
+        st.markdown(f'<h3 style="color: {PYLON_ORANGE};">⚠️ 조사 필요 국소</h3>', unsafe_allow_html=True)
         
         problem_sites = merged_bill_actual[
             merged_bill_actual['mismatch_class'].isin(['조사 필요', '긴급 조사'])
@@ -341,11 +347,6 @@ with tab3:
         else:
             st.success("✅ 조사가 필요한 국소가 없습니다.")
 
-# Footer
-st.divider()
-st.markdown("""
-<div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p><strong>PYLON v0.0.3 (Dev) | SKT Network ESG추진팀</strong></p>
-</div>
-""", unsafe_allow_html=True)
+# Footer with PYLON branding
+st.markdown(create_footer(), unsafe_allow_html=True)
 

@@ -22,9 +22,16 @@ from src.config_loader import load_governance_config
 from components.global_controls import render_governance_badges
 from components.widget_card import render_simple_metric_card
 from components.action_inbox import render_compact_action_inbox
+from styles import (
+    PYLON_BLUE, PYLON_GREEN,
+    apply_page_style, create_footer
+)
 
 # Page config
 st.set_page_config(page_title="검증 & 실증 | PYLON", layout="wide", page_icon="🔬")
+
+# Apply PYLON brand colors
+st.markdown(apply_page_style(), unsafe_allow_html=True)
 
 # Initialize
 data_dir = Path("data")
@@ -35,8 +42,8 @@ verified_savings_manager = VerifiedSavingsManager(data_dir)
 project_master_manager = ProjectMasterManager(data_dir)
 gov_config = load_governance_config()
 
-# Header
-st.title("🔬 PYLON - 솔루션 실증 & 검증")
+# Header with brand color
+st.markdown(f'<h1 style="color: {PYLON_BLUE};">🔬 PYLON - 솔루션 실증 & 검증</h1>', unsafe_allow_html=True)
 st.markdown("과제별 효과검증 및 에너지 절감 솔루션의 실증 실험 관리")
 
 # User and system status in sidebar
@@ -462,11 +469,6 @@ with st.form("new_experiment_form"):
             st.success(f"✅ 파일럿 실험 등록 완료: {experiment.id}")
             st.rerun()
 
-# Footer
-st.divider()
-st.markdown("""
-<div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p><strong>PYLON v0.0.3 (Dev) | SKT Network ESG추진팀</strong></p>
-</div>
-""", unsafe_allow_html=True)
+# Footer with PYLON branding
+st.markdown(create_footer(), unsafe_allow_html=True)
 

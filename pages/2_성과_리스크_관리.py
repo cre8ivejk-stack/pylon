@@ -22,9 +22,16 @@ from components.global_controls import render_sidebar_filters, render_governance
 from components.widget_card import render_widget_card, render_simple_metric_card
 from components.action_inbox import render_compact_action_inbox
 from config.tasks import get_domains, get_tasks_by_domain
+from styles import (
+    PYLON_BLUE, PYLON_GREEN, PYLON_ORANGE, PYLON_RED,
+    apply_page_style, create_footer
+)
 
 # Page config
 st.set_page_config(page_title="성과 & 리스크 관리 | PYLON", layout="wide", page_icon="📊")
+
+# Apply PYLON brand colors
+st.markdown(apply_page_style(), unsafe_allow_html=True)
 
 # Initialize
 data_dir = Path("data")
@@ -34,8 +41,8 @@ verified_savings_manager = VerifiedSavingsManager(data_dir)
 project_master_manager = ProjectMasterManager(data_dir)
 gov_config = load_governance_config()
 
-# Header
-st.title("📊 PYLON - 성과 & 리스크 관리")
+# Header with brand color
+st.markdown(f'<h1 style="color: {PYLON_BLUE};">📊 PYLON - 성과 & 리스크 관리</h1>', unsafe_allow_html=True)
 st.markdown("과제 성과 및 리스크 모니터링")
 
 # User and system status in sidebar
@@ -117,7 +124,8 @@ with tab1:
         )
     
     with col3:
-        st.markdown("#### ✅ 확정 절감")
+        # Confirmed savings: GREEN for performance/success
+        st.markdown(f'<h4 style="color: {PYLON_GREEN};">✅ 확정 절감</h4>', unsafe_allow_html=True)
         st.metric(
             label="검증 완료",
             value=f"₩{verified_total:,.0f}/월",
@@ -377,7 +385,8 @@ with tab2:
         st.plotly_chart(fig_risk_dist, use_container_width=True)
         
         # High risk sites
-        st.markdown("### 🔴 High Risk 국소")
+        # High Risk: RED for critical attention
+        st.markdown(f'<h3 style="color: {PYLON_RED};">🔴 High Risk 국소</h3>', unsafe_allow_html=True)
         
         high_risk_sites = merged[merged['risk_score_display'] > 70].copy()
         
@@ -425,11 +434,6 @@ with tab2:
         
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
-# Footer
-st.divider()
-st.markdown("""
-<div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p><strong>PYLON v0.0.3 (Dev) | SKT Network ESG추진팀</strong></p>
-</div>
-""", unsafe_allow_html=True)
+# Footer with PYLON branding
+st.markdown(create_footer(), unsafe_allow_html=True)
 

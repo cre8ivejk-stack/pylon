@@ -11,7 +11,8 @@ from src.analytics import (
     detect_zero_usage_sites,
     recommend_contract_power_adjustment,
     decompose_cost_variance,
-    calculate_yoy_comparison
+    calculate_yoy_comparison,
+    prepare_monthly_3year_comparison
 )
 
 
@@ -233,13 +234,23 @@ class TestYoYComparison:
     """Tests for year-over-year comparison."""
     
     def test_basic_yoy(self):
-        """Test basic YoY calculation."""
+        """Test basic YoY calculation with old 4-digit format."""
         df = pd.DataFrame([
             {'yymm': '2301', 'kwh_bill': 100},
             {'yymm': '2401', 'kwh_bill': 110},
         ])
         
         yoy = calculate_yoy_comparison(df, current_month='2401', metric='kwh_bill')
+        assert yoy == 10.0
+    
+    def test_basic_yoy_new_format(self):
+        """Test basic YoY calculation with new 6-digit format."""
+        df = pd.DataFrame([
+            {'yymm': 202401, 'kwh_bill': 100},
+            {'yymm': 202501, 'kwh_bill': 110},
+        ])
+        
+        yoy = calculate_yoy_comparison(df, current_month=202501, metric='kwh_bill')
         assert yoy == 10.0
     
     def test_no_previous_year(self):
@@ -287,6 +298,113 @@ class TestContractPowerRecommendation:
         
         assert result['recommendation'] == '데이터 부족'
         assert result['savings_est'] == 0
+
+
+class TestMonthly3YearComparison:
+    """Tests for monthly 3-year comparison data preparation."""
+    
+    def test_basic_3year_data(self):
+        """Test basic 3-year comparison data generation."""
+        # Create sample data for 3 years
+        data = {
+            'yymm': [202401, 202402, 202501, 202502, 202601, 202602],
+            'kwh_bill': [1000, 1100, 1200, 1300, 1400, 1500]
+        }
+        df = pd.DataFrame(data)
+        
+        result = prepare_monthly_3year_comparison(df, 'kwh_bill')
+        
+        # Should have data for years 2024, 2025, 2026
+        assert len(result) == 36  # 3 years × 12 months
+        assert set(result['year'].unique()) == {2024, 2025, 2026}
+        assert set(result['month'].unique()) == set(range(1, 13))
+        
+        # Check specific values
+        jan_2024 = result[(result['year'] == 2024) & (result['month'] == 1)]
+        assert jan_2024['kwh'].values[0] == 1000
+        
+        feb_2024 = result[(result['year'] == 2024) & (result['month'] == 2)]
+        assert feb_2024['kwh'].values[0] == 1100
+    
+    def test_missing_months_filled_with_zero(self):
+        """Test that missing months are filled with 0."""
+        data = {
+            'yymm': [202401, 202403, 202601],  # Missing Feb
+            'kwh_bill': [1000, 1200, 1400]
+        }
+        df = pd.DataFrame(data)
+        
+        result = prepare_monthly_3year_comparison(df, 'kwh_bill')
+        
+        # Check that Feb 2024 exists and is 0
+        feb_2024 = result[(result['year'] == 2024) & (result['month'] == 2)]
+        assert len(feb_2024) == 1
+        assert feb_2024['kwh'].values[0] == 0
+    
+    def test_string_yymm_format(self):
+        """Test with string format yymm."""
+        data = {
+            'yymm': ['202401', '202402', '202501'],
+            'kwh_bill': [1000, 1100, 1200]
+        }
+        df = pd.DataFrame(data)
+        
+        result = prepare_monthly_3year_comparison(df, 'kwh_bill')
+        
+        assert len(result) > 0
+        assert 'year' in result.columns
+        assert 'month' in result.columns
+        assert 'kwh' in result.columns
+    
+    def test_empty_dataframe(self):
+        """Test with empty dataframe."""
+        df = pd.DataFrame(columns=['yymm', 'kwh_bill'])
+        
+        result = prepare_monthly_3year_comparison(df, 'kwh_bill')
+        
+        assert len(result) == 0
+        assert list(result.columns) == ['year', 'month', 'kwh']
+    
+    def test_missing_columns(self):
+        """Test with missing required columns."""
+        df = pd.DataFrame({'other_col': [1, 2, 3]})
+        
+        result = prepare_monthly_3year_comparison(df, 'kwh_bill')
+        
+        assert len(result) == 0
+        assert list(result.columns) == ['year', 'month', 'kwh']
+    
+    def test_aggregation_by_month(self):
+        """Test that multiple records for same month are aggregated."""
+        data = {
+            'yymm': [202401, 202401, 202402, 202402],
+            'kwh_bill': [500, 500, 600, 600]
+        }
+        df = pd.DataFrame(data)
+        
+        result = prepare_monthly_3year_comparison(df, 'kwh_bill')
+        
+        # Check that Jan 2024 has sum of both records
+        jan_2024 = result[(result['year'] == 2024) & (result['month'] == 1)]
+        assert jan_2024['kwh'].values[0] == 1000
+        
+        feb_2024 = result[(result['year'] == 2024) & (result['month'] == 2)]
+        assert feb_2024['kwh'].values[0] == 1200
+    
+    def test_invalid_yymm_filtered_out(self):
+        """Test that invalid yymm values are filtered out."""
+        data = {
+            'yymm': [202401, 202402, '', '123', None, 202403],
+            'kwh_bill': [1000, 1100, 1200, 1300, 1400, 1500]
+        }
+        df = pd.DataFrame(data)
+        
+        result = prepare_monthly_3year_comparison(df, 'kwh_bill')
+        
+        # Should only process valid yymm values (202401, 202402, 202403)
+        assert len(result) > 0
+        # Check that only 2024 data exists
+        assert set(result['year'].unique()) == {2024}
 
 
 if __name__ == '__main__':

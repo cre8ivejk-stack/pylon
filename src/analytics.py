@@ -276,7 +276,7 @@ def decompose_cost_variance(
 
 def calculate_yoy_comparison(
     df: pd.DataFrame,
-    current_month: str,
+    current_month,
     metric: str = 'kwh_bill'
 ) -> Optional[float]:
     """
@@ -284,20 +284,51 @@ def calculate_yoy_comparison(
     
     Args:
         df: Dataframe with yymm and metric columns
-        current_month: Current month (e.g., "2401")
+        current_month: Current month (e.g., "2401" or 202401, int or str)
         metric: Metric to compare
     
     Returns:
         YoY percentage change or None if not available
     """
-    # Calculate previous year month
-    year = int(current_month[:2])
-    month = int(current_month[2:])
-    prev_year = year - 1
-    prev_month = f"{prev_year:02d}{month:02d}"
+    # Convert to string and handle both formats
+    current_str = str(current_month)
     
-    current_value = df[df['yymm'] == current_month][metric].sum()
-    prev_value = df[df['yymm'] == prev_month][metric].sum()
+    # Determine format and extract year/month
+    if len(current_str) == 6:  # YYYYMM format (202401)
+        year = int(current_str[:4])
+        month = int(current_str[4:6])
+        prev_year = year - 1
+        prev_month_value = int(f"{prev_year}{month:02d}")
+        current_month_value = int(current_str)
+    elif len(current_str) == 4:  # YYMM format (2401)
+        year = int(current_str[:2])
+        month = int(current_str[2:4])
+        prev_year = year - 1
+        prev_month_value = f"{prev_year:02d}{month:02d}"
+        current_month_value = current_str
+    else:
+        return None
+    
+    # Check if yymm column exists
+    if 'yymm' not in df.columns:
+        return None
+    
+    # Try both direct comparison and type-converted comparison
+    current_value = df[df['yymm'] == current_month_value][metric].sum()
+    if current_value == 0:
+        # Try converting types
+        try:
+            current_value = df[df['yymm'].astype(str) == str(current_month_value)][metric].sum()
+        except:
+            pass
+    
+    prev_value = df[df['yymm'] == prev_month_value][metric].sum()
+    if prev_value == 0:
+        # Try converting types
+        try:
+            prev_value = df[df['yymm'].astype(str) == str(prev_month_value)][metric].sum()
+        except:
+            pass
     
     if prev_value == 0:
         return None
@@ -337,4 +368,74 @@ def calculate_anomaly_score(
     site_df['is_anomaly'] = abs(site_df['z_score']) > threshold_std
     
     return site_df
+
+
+def prepare_monthly_3year_comparison(
+    df: pd.DataFrame,
+    metric: str = 'kwh_bill'
+) -> pd.DataFrame:
+    """
+    Prepare monthly 3-year comparison data for grouped bar chart.
+    
+    Args:
+        df: Bills dataframe with yymm and metric columns
+        metric: Metric to aggregate (default: 'kwh_bill')
+    
+    Returns:
+        DataFrame with columns: year, month, kwh (aggregated metric)
+        Returns empty DataFrame if insufficient data
+    """
+    if len(df) == 0 or 'yymm' not in df.columns or metric not in df.columns:
+        return pd.DataFrame(columns=['year', 'month', 'kwh'])
+    
+    # Create working copy
+    work_df = df.copy()
+    
+    # Parse year and month from yymm (handle both int and str)
+    work_df['yymm_str'] = work_df['yymm'].astype(str)
+    
+    # Filter out invalid yymm values (empty strings, NaN, too short)
+    work_df = work_df[work_df['yymm_str'].str.len() >= 6].copy()
+    
+    if len(work_df) == 0:
+        return pd.DataFrame(columns=['year', 'month', 'kwh'])
+    
+    # Extract year and month
+    work_df['year'] = work_df['yymm_str'].str[:4].astype(int)
+    work_df['month'] = work_df['yymm_str'].str[4:6].astype(int)
+    
+    # Determine base year (most recent)
+    max_year = work_df['year'].max()
+    
+    # Filter to recent 3 years
+    target_years = [max_year - 2, max_year - 1, max_year]
+    work_df = work_df[work_df['year'].isin(target_years)]
+    
+    if len(work_df) == 0:
+        return pd.DataFrame(columns=['year', 'month', 'kwh'])
+    
+    # Aggregate by year and month
+    monthly_agg = work_df.groupby(['year', 'month'])[metric].sum().reset_index()
+    monthly_agg.rename(columns={metric: 'kwh'}, inplace=True)
+    
+    # Create full month range (1-12) for each year with data
+    all_combinations = []
+    available_years = monthly_agg['year'].unique()
+    
+    for year in available_years:
+        for month in range(1, 13):
+            all_combinations.append({'year': year, 'month': month})
+    
+    full_grid = pd.DataFrame(all_combinations)
+    
+    # Left join to preserve all month-year combinations
+    result = full_grid.merge(monthly_agg, on=['year', 'month'], how='left')
+    
+    # Fill missing values with 0
+    result['kwh'] = result['kwh'].fillna(0)
+    
+    # Sort by year and month
+    result = result.sort_values(['year', 'month']).reset_index(drop=True)
+    
+    return result
 

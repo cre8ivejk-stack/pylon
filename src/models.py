@@ -151,24 +151,33 @@ class GovernanceBadge:
     exceptions_applied: int = 0
     
     @staticmethod
-    def create_from_config_and_data(config: dict, latest_yymm: str = None) -> 'GovernanceBadge':
+    def create_from_config_and_data(config: dict, latest_yymm = None) -> 'GovernanceBadge':
         """
         Create badge from config and computed data.
         
         Args:
             config: Configuration dictionary
-            latest_yymm: Latest month from data (YYMM format)
+            latest_yymm: Latest month from data (YYMM or YYYYMM format, int or str)
         
         Returns:
             GovernanceBadge instance
         """
         # Format data freshness
-        if latest_yymm and len(latest_yymm) == 4:
-            year = f"20{latest_yymm[:2]}"
-            month = latest_yymm[2:]
-            data_freshness = f"{year}-{month}"
-        else:
-            data_freshness = "N/A"
+        data_freshness = "N/A"
+        
+        if latest_yymm is not None:
+            # Convert to string
+            yymm_str = str(latest_yymm)
+            
+            # Handle both YYYYMM (6 digits) and YYMM (4 digits) formats
+            if len(yymm_str) == 6:  # New format: 202401
+                year = yymm_str[:4]
+                month = yymm_str[4:6]
+                data_freshness = f"{year}-{month}"
+            elif len(yymm_str) == 4:  # Old format: 2401
+                year = f"20{yymm_str[:2]}"
+                month = yymm_str[2:4]
+                data_freshness = f"{year}-{month}"
         
         return GovernanceBadge(
             official_version=config.get('official_version', 'v1.0'),

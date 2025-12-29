@@ -8,7 +8,14 @@ from typing import Tuple
 
 def generate_sample_data(data_dir: Path) -> None:
     """
-    Generate sample datasets for MVP demonstration.
+    Generate rich sample datasets for comprehensive testing.
+    
+    Includes:
+    - 3 full years of data (2024-2026)
+    - 500 sites with diverse characteristics
+    - Realistic scenarios: normal, high-risk, zero-usage, billing errors
+    - Seasonal patterns and trends (3G decline, 5G growth)
+    - Contract optimization opportunities
     
     Args:
         data_dir: Directory to save parquet files
@@ -17,22 +24,43 @@ def generate_sample_data(data_dir: Path) -> None:
     
     # Configuration
     np.random.seed(42)
-    months = [f"23{m:02d}" for m in range(7, 13)] + [f"24{m:02d}" for m in range(1, 13)]
+    # 2024.01 ~ 2026.04 (28 months)
+    months = []
+    for year in range(2024, 2026):
+        for m in range(1, 13):
+            months.append(f"{year}{m:02d}")
+    # Add 2026.01 ~ 2026.04
+    for m in range(1, 5):
+        months.append(f"2026{m:02d}")
     regions = ["수도권", "중부", "동부", "서부"]
-    site_types = ["기지국", "통합국", "사옥", "중계국", "기타"]
+    site_types = ["기지국", "통합국", "사옥", "중계국", "IDC", "기타"]  # Added IDC
     contract_types = ["정액", "종량"]
     contract_targets = ["ME", "MC"]  # 한전계약(ME), 건물계약(MC)
     network_gens = ["3G", "LTE", "5G"]
     voltages = ["저압", "고압"]
     data_sources = ["EMS", "PRB", "EST"]
     
-    n_sites = 300
+    n_sites = 500  # Increased from 300
     
-    # Generate site_master
+    # Generate site_master with scenario tags
     sites = []
     for i in range(n_sites):
         site_id = f"SITE{i:04d}"
-        site_type = np.random.choice(site_types, p=[0.55, 0.2, 0.05, 0.15, 0.05])
+        site_type = np.random.choice(site_types, p=[0.50, 0.18, 0.05, 0.12, 0.10, 0.05])
+        network_gen = np.random.choice(network_gens, p=[0.05, 0.35, 0.60])  # 5% 3G, 35% LTE, 60% 5G
+        is_rapa = np.random.choice([True, False], p=[0.30, 0.70])
+        
+        # Scenario assignment (for diverse test cases)
+        scenario = "normal"
+        if i < 50:  # First 50 sites: High Risk scenarios
+            scenario = "high_risk"
+        elif i < 100:  # Next 50: Contract optimization candidates
+            scenario = "overcontracted"
+        elif i < 125:  # Next 25: Zero usage (철거 대상)
+            scenario = "zero_usage"
+        elif i < 175:  # Next 50: Billing errors
+            scenario = "billing_error"
+        
         sites.append({
             'site_id': site_id,
             'site_name': f"{site_type}_{i:04d}",
@@ -41,68 +69,139 @@ def generate_sample_data(data_dir: Path) -> None:
             'voltage': np.random.choice(voltages, p=[0.7, 0.3]),
             'contract_type': np.random.choice(contract_types, p=[0.4, 0.6]),
             'contract_target': np.random.choice(contract_targets, p=[0.7, 0.3]),  # 70% ME, 30% MC
-            'network_gen': np.random.choice(network_gens, p=[0.05, 0.35, 0.6]),  # 5% 3G, 35% LTE, 60% 5G
-            'is_rapa': np.random.choice([True, False], p=[0.3, 0.7])  # 30% RAPA
+            'network_gen': network_gen,
+            'generation': network_gen,  # For filter compatibility
+            'is_rapa': is_rapa,
+            'rapa_type': 'RAPA' if is_rapa else '일반',  # For filter compatibility
+            'scenario': scenario  # Internal tag for data generation
         })
     
     site_master = pd.DataFrame(sites)
     site_master.to_parquet(data_dir / "sample_site_master.parquet", index=False)
     
-    # Generate bills
+    # Generate bills with realistic scenarios
     bills = []
-    for month in months:
+    for month_idx, month in enumerate(months):
+        year = int(month[:4])
+        month_num = int(month[4:6])
+        
         for _, site_row in site_master.iterrows():
             site_id = site_row['site_id']
             contract_type = site_row['contract_type']
+            network_gen = site_row['network_gen']
+            scenario = site_row['scenario']
             
-            # Base consumption with seasonality
-            base_kwh = np.random.uniform(5000, 50000)
-            month_num = int(month[2:])
-            seasonal = 1.0 + 0.3 * np.sin((month_num - 3) * np.pi / 6)  # Peak in summer
-            kwh_bill = base_kwh * seasonal * np.random.uniform(0.9, 1.1)
+            # Base consumption varies by site type and generation
+            if site_row['site_type'] == 'IDC':
+                base_kwh = np.random.uniform(50000, 200000)
+            elif site_row['site_type'] == '사옥':
+                base_kwh = np.random.uniform(30000, 100000)
+            elif site_row['site_type'] == '통합국':
+                base_kwh = np.random.uniform(20000, 80000)
+            else:
+                base_kwh = np.random.uniform(5000, 50000)
             
-            # Some sites have zero usage occasionally
-            if np.random.random() < 0.02:
-                kwh_bill = 0
+            # Seasonality: Peak in summer (June-August)
+            seasonal = 1.0 + 0.4 * np.sin((month_num - 3) * np.pi / 6)
+            
+            # Year-over-year trend
+            if network_gen == "3G":
+                # 3G declining over time (phase-out effect)
+                trend = 1.0 - 0.15 * (year - 2024)
+            elif network_gen == "5G":
+                # 5G growing
+                trend = 1.0 + 0.10 * (year - 2024)
+            else:
+                # LTE stable
+                trend = 1.0
+            
+            # Apply scenario-specific patterns
+            if scenario == "high_risk":
+                # High variance, occasional spikes
+                kwh_bill = base_kwh * seasonal * trend * np.random.uniform(0.5, 2.0)
+            elif scenario == "overcontracted":
+                # Consistently low usage vs contract
+                kwh_bill = base_kwh * seasonal * trend * np.random.uniform(0.4, 0.7)
+            elif scenario == "zero_usage":
+                # Zero usage for last 3-6 months (phase-out)
+                # For 25 months, zero out last 3-4 months
+                if month_idx >= len(months) - 4:
+                    kwh_bill = 0
+                else:
+                    kwh_bill = base_kwh * seasonal * trend * np.random.uniform(0.8, 1.0)
+            elif scenario == "billing_error":
+                # Occasional large discrepancies
+                if np.random.random() < 0.2:
+                    kwh_bill = base_kwh * seasonal * trend * np.random.uniform(1.5, 3.0)
+                else:
+                    kwh_bill = base_kwh * seasonal * trend * np.random.uniform(0.9, 1.1)
+            else:  # normal
+                kwh_bill = base_kwh * seasonal * trend * np.random.uniform(0.9, 1.1)
             
             # Contract power
             if contract_type == "정액":
-                contract_power_kw = kwh_bill / 720 * 1.2  # Rough conversion
+                if scenario == "overcontracted":
+                    # Over-contracted: contract power much higher than actual usage
+                    contract_power_kw = (kwh_bill / 720 * 1.2) * 1.5
+                else:
+                    contract_power_kw = kwh_bill / 720 * 1.2
             else:
                 contract_power_kw = kwh_bill / 720 * 1.5
             
-            # Cost calculation (simplified)
+            # Cost calculation (more realistic)
             if contract_type == "정액":
-                cost_bill = contract_power_kw * 8000 + kwh_bill * 80  # 기본요금 + 전력량요금
+                basic_charge = contract_power_kw * 8000  # 기본요금
+                energy_charge = kwh_bill * 80  # 전력량요금
+                cost_bill = basic_charge + energy_charge
             else:
                 cost_bill = kwh_bill * 120
             
             bills.append({
-                'yymm': month,
+                'yymm': int(month),  # Convert to int for consistency
                 'site_id': site_id,
-                'kwh_bill': kwh_bill,
-                'cost_bill': cost_bill,
+                'kwh_bill': round(kwh_bill, 2),
+                'cost_bill': round(cost_bill, 2),
                 'contract_type': contract_type,
-                'contract_type_minor': '표준형',  # 향후 확장 예정
-                'contract_power_kw': contract_power_kw,
+                'contract_type_minor': '표준형',
+                'contract_power_kw': round(contract_power_kw, 2),
                 'region': site_row['region'],
                 'contract_target': site_row['contract_target'],
-                'network_gen': site_row['network_gen'],
-                'is_rapa': site_row['is_rapa']
+                'network_gen': network_gen,
+                'generation': network_gen,  # For filter compatibility
+                'is_rapa': site_row['is_rapa'],
+                'rapa_type': site_row['rapa_type']  # For filter compatibility
             })
     
     bills_df = pd.DataFrame(bills)
     bills_df.to_parquet(data_dir / "sample_bills.parquet", index=False)
     
-    # Generate actual (with some variance from bills)
+    # Generate actual (with scenario-based variance from bills)
     actual = []
+    # Get scenario mapping from site_master
+    scenario_map = dict(zip(site_master['site_id'], site_master['scenario']))
+    
     for _, bill_row in bills_df.iterrows():
-        # Actual differs from bill by some amount
-        variance_factor = np.random.uniform(0.85, 1.15)
+        site_id = bill_row['site_id']
+        scenario = scenario_map.get(site_id, 'normal')
+        
+        # Determine variance based on scenario
+        if scenario == "billing_error":
+            # Large discrepancy between bill and actual
+            if np.random.random() < 0.3:  # 30% chance of major error
+                variance_factor = np.random.choice([0.5, 1.8])  # Under or over billing
+            else:
+                variance_factor = np.random.uniform(0.90, 1.10)
+        elif scenario == "high_risk":
+            # Higher variance
+            variance_factor = np.random.uniform(0.70, 1.30)
+        else:
+            # Normal variance
+            variance_factor = np.random.uniform(0.95, 1.05)
+        
         kwh_actual = bill_row['kwh_bill'] * variance_factor
         
-        # Some sites missing actual data
-        if np.random.random() < 0.05:
+        # Some sites missing actual data (reduced from 5% to 3%)
+        if np.random.random() < 0.03:
             continue
         
         # Data source affects confidence
@@ -118,67 +217,101 @@ def generate_sample_data(data_dir: Path) -> None:
         
         actual.append({
             'yymm': bill_row['yymm'],
-            'site_id': bill_row['site_id'],
-            'kwh_actual': kwh_actual,
-            'cost_actual_est': cost_actual_est,
+            'site_id': site_id,
+            'kwh_actual': round(kwh_actual, 2),
+            'cost_actual_est': round(cost_actual_est, 2),
             'data_source': ds,
-            'confidence': confidence,
+            'confidence': round(confidence, 4),
             'region': bill_row['region'],
             'contract_target': bill_row['contract_target'],
             'network_gen': bill_row['network_gen'],
-            'is_rapa': bill_row['is_rapa']
+            'generation': bill_row['generation'],
+            'is_rapa': bill_row['is_rapa'],
+            'rapa_type': bill_row['rapa_type']
         })
     
     actual_df = pd.DataFrame(actual)
     actual_df.to_parquet(data_dir / "sample_actual.parquet", index=False)
     
-    # Generate plan
+    # Generate plan (strategic targets, slightly optimistic)
     plan = []
     for month in months:
-        # Aggregate plan by month
-        total_kwh_plan = bills_df[bills_df['yymm'] == month]['kwh_bill'].sum() * 1.05  # Plan is 5% higher
-        total_cost_plan = bills_df[bills_df['yymm'] == month]['cost_bill'].sum() * 1.05
+        month_int = int(month)
+        # Aggregate plan by month - plan is typically 3-7% higher than actual
+        plan_buffer = np.random.uniform(1.03, 1.07)
+        total_kwh_plan = bills_df[bills_df['yymm'] == month_int]['kwh_bill'].sum() * plan_buffer
+        total_cost_plan = bills_df[bills_df['yymm'] == month_int]['cost_bill'].sum() * plan_buffer
         
         plan.append({
-            'yymm': month,
+            'yymm': month_int,
             'site_id': None,
-            'kwh_plan': total_kwh_plan,
-            'cost_plan': total_cost_plan
+            'kwh_plan': round(total_kwh_plan, 2),
+            'cost_plan': round(total_cost_plan, 2)
         })
     
     plan_df = pd.DataFrame(plan)
     plan_df.to_parquet(data_dir / "sample_plan.parquet", index=False)
     
-    # Generate traffic
+    # Generate traffic (network generation specific patterns)
     traffic = []
-    for month in months:
+    for month_idx, month in enumerate(months):
+        month_int = int(month)
+        year = int(month[:4])
+        
         for _, site_row in site_master.iterrows():
             site_id = site_row['site_id']
-            # Traffic correlates loosely with kwh
-            site_bill = bills_df[(bills_df['yymm'] == month) & (bills_df['site_id'] == site_id)]
+            network_gen = site_row['network_gen']
+            
+            # Traffic correlates with kwh but varies by generation
+            site_bill = bills_df[(bills_df['yymm'] == month_int) & (bills_df['site_id'] == site_id)]
+            
             if len(site_bill) > 0:
                 kwh = site_bill['kwh_bill'].values[0]
-                gb_traffic = kwh / 10 * np.random.uniform(0.8, 1.2)  # Rough correlation
+                
+                # Base traffic from energy consumption
+                if network_gen == "5G":
+                    # 5G: High traffic, growing over time
+                    base_traffic = kwh / 8 * (1.0 + 0.15 * (year - 2024))
+                elif network_gen == "LTE":
+                    # LTE: Moderate traffic, stable
+                    base_traffic = kwh / 12
+                else:  # 3G
+                    # 3G: Low traffic, declining
+                    base_traffic = kwh / 20 * (1.0 - 0.20 * (year - 2024))
+                
+                gb_traffic = base_traffic * np.random.uniform(0.8, 1.2)
             else:
                 gb_traffic = np.random.uniform(100, 10000)
             
             traffic.append({
-                'yymm': month,
+                'yymm': month_int,
                 'site_id': site_id,
-                'gb_traffic': gb_traffic,
+                'gb_traffic': round(gb_traffic, 2),
                 'region': site_row['region'],
-                'network_gen': site_row['network_gen']
+                'network_gen': network_gen,
+                'generation': network_gen
             })
     
     traffic_df = pd.DataFrame(traffic)
     traffic_df.to_parquet(data_dir / "sample_traffic.parquet", index=False)
     
-    print(f"✓ Generated sample data in {data_dir}")
-    print(f"  - Sites: {len(site_master)}")
-    print(f"  - Bills: {len(bills_df)} records")
-    print(f"  - Actual: {len(actual_df)} records")
-    print(f"  - Plan: {len(plan_df)} records")
-    print(f"  - Traffic: {len(traffic_df)} records")
+    print(f"✅ Generated enriched sample data in {data_dir}")
+    print(f"  📍 Sites: {len(site_master)}")
+    print(f"  📊 Bills: {len(bills_df):,} records ({len(months)} months × {n_sites} sites)")
+    print(f"  📈 Actual: {len(actual_df):,} records ({len(actual_df)/len(bills_df)*100:.1f}% coverage)")
+    print(f"  📋 Plan: {len(plan_df)} records")
+    print(f"  🌐 Traffic: {len(traffic_df):,} records")
+    print(f"\n  🎯 Scenarios:")
+    print(f"     - Normal: {len([s for s in site_master['scenario'] if s == 'normal'])} sites")
+    print(f"     - High Risk: {len([s for s in site_master['scenario'] if s == 'high_risk'])} sites")
+    print(f"     - Overcontracted: {len([s for s in site_master['scenario'] if s == 'overcontracted'])} sites")
+    print(f"     - Zero Usage: {len([s for s in site_master['scenario'] if s == 'zero_usage'])} sites")
+    print(f"     - Billing Error: {len([s for s in site_master['scenario'] if s == 'billing_error'])} sites")
+    print(f"\n  📅 Period: 2024.01 ~ 2026.04 (28 months)")
+    print(f"  🏢 Regions: {', '.join(regions)}")
+    print(f"  📡 Generations: 3G ({len(site_master[site_master['network_gen']=='3G'])}), "
+          f"LTE ({len(site_master[site_master['network_gen']=='LTE'])}), "
+          f"5G ({len(site_master[site_master['network_gen']=='5G'])})")
 
 
 def get_sample_site_master() -> pd.DataFrame:

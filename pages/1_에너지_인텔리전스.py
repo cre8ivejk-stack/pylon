@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
+import altair as alt
 from pathlib import Path
 import sys
 
@@ -17,7 +18,8 @@ from src.analytics import (
     calculate_bill_actual_error,
     classify_bill_actual_mismatch,
     decompose_cost_variance,
-    calculate_yoy_comparison
+    calculate_yoy_comparison,
+    prepare_monthly_3year_comparison
 )
 from src.actions import ActionManager
 from src.models import GovernanceBadge, ActionCategory, ValidationState
@@ -100,28 +102,232 @@ with tab1:
     if len(filtered_bills) == 0:
         st.warning("선택한 조건에 해당하는 데이터가 없습니다.")
     else:
+        # Calculate previous year same period data for comparison
+        yymm_list = filters.get('yymm_list', [])
+        prev_year_yymm = []
+        
+        if yymm_list:
+            for ym in yymm_list:
+                ym_str = str(ym)
+                if len(ym_str) == 6:  # YYYYMM format
+                    year = int(ym_str[:4])
+                    month = ym_str[4:6]
+                    prev_year_ym = int(f"{year-1}{month}")
+                    prev_year_yymm.append(prev_year_ym)
+        
+        # Get previous year data with same filters (except period)
+        if prev_year_yymm:
+            filters_prev = filters.copy()
+            filters_prev['yymm_list'] = prev_year_yymm
+            filtered_bills_prev = apply_filters(bills_df, filters_prev)
+            
+            prev_total_kwh = filtered_bills_prev['kwh_bill'].sum()
+            prev_total_cost = filtered_bills_prev['cost_bill'].sum()
+            prev_avg_unit_cost = (prev_total_cost / prev_total_kwh) if prev_total_kwh > 0 else 0
+        else:
+            prev_total_kwh = 0
+            prev_total_cost = 0
+            prev_avg_unit_cost = 0
+        
+        # Current period totals
+        total_kwh = filtered_bills['kwh_bill'].sum()
+        total_cost = filtered_bills['cost_bill'].sum()
+        avg_unit_cost = (total_cost / total_kwh) if total_kwh > 0 else 0
+        
+        # Calculate changes
+        kwh_change = ((total_kwh - prev_total_kwh) / prev_total_kwh * 100) if prev_total_kwh > 0 else None
+        cost_change = ((total_cost - prev_total_cost) / prev_total_cost * 100) if prev_total_cost > 0 else None
+        unit_cost_change = ((avg_unit_cost - prev_avg_unit_cost) / prev_avg_unit_cost * 100) if prev_avg_unit_cost > 0 else None
+        
         # KPI tiles
         col1, col2, col3, col4 = st.columns(4)
         
-        total_kwh = filtered_bills['kwh_bill'].sum()
-        total_cost = filtered_bills['cost_bill'].sum()
-        
         with col1:
-            render_simple_metric_card("총 전력량", f"{total_kwh:,.0f} kWh")
+            delta_str = None
+            if kwh_change is not None:
+                delta_str = f"{kwh_change:+.1f}% (전년 동기 대비)"
+            render_simple_metric_card("총 전력량", f"{total_kwh:,.0f} kWh", delta=delta_str)
+            if prev_total_kwh > 0:
+                st.caption(f"전년: {prev_total_kwh:,.0f} kWh")
         
         with col2:
-            render_simple_metric_card("총 전기요금", f"₩{total_cost:,.0f}")
+            delta_str = None
+            if cost_change is not None:
+                delta_str = f"{cost_change:+.1f}% (전년 동기 대비)"
+            render_simple_metric_card("총 전기요금", f"₩{total_cost:,.0f}", delta=delta_str)
+            if prev_total_cost > 0:
+                st.caption(f"전년: ₩{prev_total_cost:,.0f}")
         
         with col3:
-            avg_unit_cost = (total_cost / total_kwh) if total_kwh > 0 else 0
-            render_simple_metric_card("평균 단가", f"₩{avg_unit_cost:.1f}/kWh")
+            delta_str = None
+            if unit_cost_change is not None:
+                delta_str = f"{unit_cost_change:+.1f}% (전년 동기 대비)"
+            render_simple_metric_card("평균 단가", f"₩{avg_unit_cost:.1f}/kWh", delta=delta_str)
+            if prev_avg_unit_cost > 0:
+                st.caption(f"전년: ₩{prev_avg_unit_cost:.1f}/kWh")
         
         with col4:
             # YoY comparison - use the last month in selection
             selected_period = filters['yymm_list'][-1] if filters.get('yymm_list') else None
             yoy_change = calculate_yoy_comparison(bills_df, selected_period, 'cost_bill') if selected_period else None
             yoy_display = f"{yoy_change:+.1f}%" if yoy_change is not None else "N/A"
-            render_simple_metric_card("YoY 변화", yoy_display, help_text="전년 동월 대비")
+            render_simple_metric_card("YoY 변화 (최종월)", yoy_display, help_text="선택 기간의 마지막 월 기준")
+        
+        # Button for 3-year comparison chart
+        st.markdown("### 📊 상세 분석")
+        
+        # Initialize session state for chart toggle
+        if "show_3year_chart" not in st.session_state:
+            st.session_state["show_3year_chart"] = False
+        
+        # Toggle button
+        button_label = "📉 월별 3개년 비교 숨기기" if st.session_state["show_3year_chart"] else "📊 월별 3개년 비교 보기 (전력량/요금/단가/YoY)"
+        if st.button(button_label, key="toggle_3year_chart"):
+            st.session_state["show_3year_chart"] = not st.session_state["show_3year_chart"]
+        
+        # Show charts if toggled on
+        if st.session_state["show_3year_chart"]:
+            # Apply filters excluding period filter (to show full 3 years)
+            # Create a copy of filters without the period filter
+            filters_no_period = filters.copy()
+            filters_no_period['yymm_list'] = []  # Remove period restriction
+            
+            # Apply all other filters
+            filtered_bills_no_period = apply_filters(bills_df, filters_no_period)
+            
+            # Prepare 3-year comparison data for multiple metrics
+            kwh_data = prepare_monthly_3year_comparison(filtered_bills_no_period, 'kwh_bill')
+            cost_data = prepare_monthly_3year_comparison(filtered_bills_no_period, 'cost_bill')
+            
+            if len(kwh_data) > 0 and len(cost_data) > 0:
+                # Calculate average unit cost (cost/kwh)
+                avg_cost_data = kwh_data.copy()
+                avg_cost_data = avg_cost_data.merge(cost_data, on=['year', 'month'], suffixes=('_kwh', '_cost'))
+                avg_cost_data['avg_unit_cost'] = avg_cost_data.apply(
+                    lambda row: row['kwh_cost'] / row['kwh_kwh'] if row['kwh_kwh'] > 0 else 0,
+                    axis=1
+                )
+                avg_cost_data = avg_cost_data[['year', 'month', 'avg_unit_cost']].copy()
+                avg_cost_data.rename(columns={'avg_unit_cost': 'kwh'}, inplace=True)
+                
+                # Calculate YoY change for each month
+                yoy_data = []
+                for year in kwh_data['year'].unique():
+                    for month in range(1, 13):
+                        current = cost_data[(cost_data['year'] == year) & (cost_data['month'] == month)]
+                        prev = cost_data[(cost_data['year'] == year - 1) & (cost_data['month'] == month)]
+                        
+                        if len(current) > 0 and len(prev) > 0:
+                            current_val = current['kwh'].values[0]
+                            prev_val = prev['kwh'].values[0]
+                            
+                            if prev_val > 0:
+                                yoy_pct = ((current_val - prev_val) / prev_val) * 100
+                                yoy_data.append({'year': year, 'month': month, 'kwh': yoy_pct})
+                
+                yoy_df = pd.DataFrame(yoy_data) if yoy_data else pd.DataFrame(columns=['year', 'month', 'kwh'])
+                
+                # Create tabs for different metrics
+                chart_tab1, chart_tab2, chart_tab3, chart_tab4 = st.tabs([
+                    "⚡ 전력량", "💰 전기요금", "📊 평균단가", "📈 YoY 변화"
+                ])
+                
+                with chart_tab1:
+                    chart_kwh = alt.Chart(kwh_data).mark_bar().encode(
+                        x=alt.X('month:O', title='월', axis=alt.Axis(labelAngle=0)),
+                        y=alt.Y('kwh:Q', title='kWh', axis=alt.Axis(format=',.0f')),
+                        color=alt.Color('year:N', title='연도', legend=alt.Legend(orient='top')),
+                        xOffset='year:N',
+                        tooltip=[
+                            alt.Tooltip('year:N', title='연도'),
+                            alt.Tooltip('month:O', title='월'),
+                            alt.Tooltip('kwh:Q', title='kWh', format=',.0f')
+                        ]
+                    ).properties(
+                        title='월별 전력량 (kWh) - 3개년 비교',
+                        height=400
+                    )
+                    st.altair_chart(chart_kwh, use_container_width=True)
+                    
+                    with st.expander("📊 데이터 테이블"):
+                        pivot = kwh_data.pivot(index='month', columns='year', values='kwh')
+                        pivot.columns.name = None
+                        pivot.index.name = '월'
+                        st.dataframe(pivot.style.format("{:,.0f}"), use_container_width=True)
+                
+                with chart_tab2:
+                    chart_cost = alt.Chart(cost_data).mark_bar().encode(
+                        x=alt.X('month:O', title='월', axis=alt.Axis(labelAngle=0)),
+                        y=alt.Y('kwh:Q', title='전기요금 (원)', axis=alt.Axis(format=',.0f')),
+                        color=alt.Color('year:N', title='연도', legend=alt.Legend(orient='top')),
+                        xOffset='year:N',
+                        tooltip=[
+                            alt.Tooltip('year:N', title='연도'),
+                            alt.Tooltip('month:O', title='월'),
+                            alt.Tooltip('kwh:Q', title='전기요금', format=',.0f')
+                        ]
+                    ).properties(
+                        title='월별 전기요금 (원) - 3개년 비교',
+                        height=400
+                    )
+                    st.altair_chart(chart_cost, use_container_width=True)
+                    
+                    with st.expander("📊 데이터 테이블"):
+                        pivot = cost_data.pivot(index='month', columns='year', values='kwh')
+                        pivot.columns.name = None
+                        pivot.index.name = '월'
+                        st.dataframe(pivot.style.format("₩{:,.0f}"), use_container_width=True)
+                
+                with chart_tab3:
+                    chart_avg = alt.Chart(avg_cost_data).mark_bar().encode(
+                        x=alt.X('month:O', title='월', axis=alt.Axis(labelAngle=0)),
+                        y=alt.Y('kwh:Q', title='평균 단가 (원/kWh)', axis=alt.Axis(format='.1f')),
+                        color=alt.Color('year:N', title='연도', legend=alt.Legend(orient='top')),
+                        xOffset='year:N',
+                        tooltip=[
+                            alt.Tooltip('year:N', title='연도'),
+                            alt.Tooltip('month:O', title='월'),
+                            alt.Tooltip('kwh:Q', title='평균 단가', format='.1f')
+                        ]
+                    ).properties(
+                        title='월별 평균 단가 (원/kWh) - 3개년 비교',
+                        height=400
+                    )
+                    st.altair_chart(chart_avg, use_container_width=True)
+                    
+                    with st.expander("📊 데이터 테이블"):
+                        pivot = avg_cost_data.pivot(index='month', columns='year', values='kwh')
+                        pivot.columns.name = None
+                        pivot.index.name = '월'
+                        st.dataframe(pivot.style.format("₩{:.1f}"), use_container_width=True)
+                
+                with chart_tab4:
+                    if len(yoy_df) > 0:
+                        chart_yoy = alt.Chart(yoy_df).mark_bar().encode(
+                            x=alt.X('month:O', title='월', axis=alt.Axis(labelAngle=0)),
+                            y=alt.Y('kwh:Q', title='YoY 변화율 (%)', axis=alt.Axis(format='.1f')),
+                            color=alt.Color('year:N', title='연도', legend=alt.Legend(orient='top')),
+                            xOffset='year:N',
+                            tooltip=[
+                                alt.Tooltip('year:N', title='연도'),
+                                alt.Tooltip('month:O', title='월'),
+                                alt.Tooltip('kwh:Q', title='YoY 변화율 (%)', format='.1f')
+                            ]
+                        ).properties(
+                            title='월별 YoY 변화율 (%) - 전년 동월 대비',
+                            height=400
+                        )
+                        st.altair_chart(chart_yoy, use_container_width=True)
+                        
+                        with st.expander("📊 데이터 테이블"):
+                            pivot = yoy_df.pivot(index='month', columns='year', values='kwh')
+                            pivot.columns.name = None
+                            pivot.index.name = '월'
+                            st.dataframe(pivot.style.format("{:+.1f}%"), use_container_width=True)
+                    else:
+                        st.info("YoY 비교를 위한 전년도 데이터가 부족합니다.")
+            else:
+                st.info("표시할 3개년 비교 데이터가 없습니다.")
         
         st.markdown("---")
         
@@ -265,11 +471,12 @@ with tab2:
 with tab3:
     st.markdown("## 🔍 청구서 vs 실사용량")
     
-    # Merge bills and actual
+    # Merge bills and actual with explicit suffixes
     merged_bill_actual = filtered_bills.merge(
         actual_df,
         on=['yymm', 'site_id'],
-        how='left'
+        how='left',
+        suffixes=('', '_actual')
     )
     
     if len(merged_bill_actual) == 0:
@@ -328,9 +535,11 @@ with tab3:
         ].copy()
         
         if len(problem_sites) > 0:
-            problem_display = problem_sites[[
-                'site_id', 'region', 'contract_type', 'kwh_bill', 'kwh_actual', 'error_pct', 'mismatch_class'
-            ]].sort_values('error_pct', key=abs, ascending=False).head(20)
+            # Select available columns (region comes from filtered_bills)
+            display_cols = ['site_id', 'region', 'contract_type', 'kwh_bill', 'kwh_actual', 'error_pct', 'mismatch_class']
+            available_cols = [col for col in display_cols if col in problem_sites.columns]
+            
+            problem_display = problem_sites[available_cols].sort_values('error_pct', key=abs, ascending=False).head(20)
             
             # Widget card for action creation
             render_widget_card(

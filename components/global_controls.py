@@ -13,7 +13,7 @@ def _initialize_filter_state():
             'period_unit': '월 단위',
             'selected_periods': [],
             'regions': ["수도권", "중부", "동부", "서부"],
-            'site_types': ["사옥", "통합국", "기지국", "중계국", "기타"],
+            'site_types': ["기지국", "통합국", "사옥", "중계국", "IDC", "기타"],
             'contract_target': '전체',
             'contract_type_major': ["정액", "종량"],
             'contract_type_minor': ['전체'],
@@ -22,7 +22,7 @@ def _initialize_filter_state():
         }
 
 
-def _convert_period_to_yymm(period_unit: str, year: Optional[int], quarters: List[int], months: List[int]) -> List[str]:
+def _convert_period_to_yymm(period_unit: str, year: Optional[int], quarters: List[int], months: List[int]) -> List[int]:
     """
     Convert period selection to yymm list.
     
@@ -33,7 +33,7 @@ def _convert_period_to_yymm(period_unit: str, year: Optional[int], quarters: Lis
         months: Selected months (1~12)
     
     Returns:
-        List of yymm strings
+        List of yymm integers (e.g., 202401)
     """
     yymm_list = []
     
@@ -41,17 +41,14 @@ def _convert_period_to_yymm(period_unit: str, year: Optional[int], quarters: Lis
         # year is a list of years
         if isinstance(year, list):
             for y in year:
-                year_short = str(y)[2:]  # e.g. 2024 -> 24
                 for m in range(1, 13):
-                    yymm_list.append(f"{year_short}{m:02d}")
+                    yymm_list.append(int(f"{y}{m:02d}"))
         else:
-            year_short = str(year)[2:]
             for m in range(1, 13):
-                yymm_list.append(f"{year_short}{m:02d}")
+                yymm_list.append(int(f"{year}{m:02d}"))
     
     elif period_unit == '분기 단위':
         # year is single year, quarters is list
-        year_short = str(year)[2:]
         for q in quarters:
             q_months = {
                 1: [1, 2, 3],
@@ -60,13 +57,12 @@ def _convert_period_to_yymm(period_unit: str, year: Optional[int], quarters: Lis
                 4: [10, 11, 12]
             }
             for m in q_months[q]:
-                yymm_list.append(f"{year_short}{m:02d}")
+                yymm_list.append(int(f"{year}{m:02d}"))
     
     else:  # '월 단위'
         # year is single year, months is list
-        year_short = str(year)[2:]
         for m in months:
-            yymm_list.append(f"{year_short}{m:02d}")
+            yymm_list.append(int(f"{year}{m:02d}"))
     
     return yymm_list
 
@@ -98,9 +94,17 @@ def render_sidebar_filters(
             key='filter_period_unit'
         )
         
-        # Extract available years from yymm
-        available_years = sorted(list(set([2000 + int(ym[:2]) for ym in available_yymm])))
-        default_year = available_years[-1] if available_years else 2024
+        # Extract available years from yymm (handle both int and str formats)
+        available_years = []
+        for ym in available_yymm:
+            ym_str = str(ym)
+            if len(ym_str) >= 4:  # New format: 202401
+                year = int(ym_str[:4])
+            else:  # Old format: 2401
+                year = 2000 + int(ym_str[:2])
+            available_years.append(year)
+        available_years = sorted(list(set(available_years)))
+        default_year = available_years[-1] if available_years else 2026
         
         yymm_list = []
         
@@ -161,8 +165,9 @@ def render_sidebar_filters(
             if selected_months:
                 yymm_list = _convert_period_to_yymm(period_unit, selected_year, [], selected_months)
         
-        # Filter yymm_list to only available data
-        yymm_list = [ym for ym in yymm_list if ym in available_yymm]
+        # Filter yymm_list to only available data (convert available_yymm to int)
+        available_yymm_int = [int(ym) for ym in available_yymm]
+        yymm_list = [ym for ym in yymm_list if ym in available_yymm_int]
         
         st.divider()
         
@@ -182,7 +187,7 @@ def render_sidebar_filters(
         
         # === 설비유형 필터 ===
         st.markdown("### 🏢 설비유형")
-        site_types_options = ["사옥", "통합국", "기지국", "중계국", "기타"]
+        site_types_options = ["기지국", "통합국", "사옥", "중계국", "IDC", "기타"]
         default_site_types = st.session_state.filters.get('site_types', site_types_options) if 'filter_site_types' not in st.session_state else st.session_state.get('filter_site_types', site_types_options)
         selected_site_types = st.multiselect(
             "설비유형 선택",
@@ -277,7 +282,7 @@ def render_filter_summary(filters: Dict[str, Any]) -> None:
     if filters.get('yymm_list'):
         yymm = filters['yymm_list']
         if len(yymm) <= 3:
-            period_str = f"기간: {', '.join(yymm)}"
+            period_str = f"기간: {', '.join([str(ym) for ym in yymm])}"
         else:
             period_str = f"기간: {yymm[0]}~{yymm[-1]} ({len(yymm)}개월)"
         summary_parts.append(period_str)
@@ -291,7 +296,7 @@ def render_filter_summary(filters: Dict[str, Any]) -> None:
     
     # Site type
     site_types = filters.get('site_types', [])
-    if len(site_types) == 5:
+    if len(site_types) == 6:
         summary_parts.append("설비: 전체")
     elif site_types:
         summary_parts.append(f"설비: {', '.join(site_types)}")
@@ -417,7 +422,11 @@ def apply_filters(
     # === Period filter (yymm) ===
     yymm_list = filters.get('yymm_list', [])
     if yymm_list and 'yymm' in filtered.columns:
-        filtered = filtered[filtered['yymm'].isin(yymm_list)]
+        # Convert both to int for comparison
+        filtered['yymm_int'] = filtered['yymm'].astype(int)
+        yymm_list_int = [int(ym) for ym in yymm_list]
+        filtered = filtered[filtered['yymm_int'].isin(yymm_list_int)]
+        filtered = filtered.drop(columns=['yymm_int'])
     
     # === Region filter ===
     regions = filters.get('regions', [])

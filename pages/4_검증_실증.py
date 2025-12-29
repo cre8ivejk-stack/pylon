@@ -8,9 +8,13 @@ import plotly.express as px
 from pathlib import Path
 from datetime import datetime, timedelta
 import sys
+import os
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent))
+# Add parent directory to path (Streamlit Cloud compatibility)
+current_dir = Path(__file__).parent
+parent_dir = current_dir.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
 
 from src.data_access import DataAccessLayer
 from src.experiments import ExperimentManager

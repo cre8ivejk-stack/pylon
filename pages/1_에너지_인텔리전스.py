@@ -475,8 +475,45 @@ with tab2:
 with tab3:
     st.markdown("## 🔍 청구서 vs 실사용량")
     
+    # 청구서vs실사용량 화면 전용 월 선택
+    st.markdown("### 📅 분석 기간 선택")
+    st.info("💡 이 화면은 월별 분석을 제공합니다. 아래에서 분석할 월을 선택하세요. (사이드바의 기간 필터와는 독립적입니다)")
+    
+    # 사용 가능한 모든 월 가져오기
+    all_available_months = sorted(bills_df['yymm'].unique().tolist(), reverse=True)
+    
+    # 월 선택 UI
+    col_month1, col_month2 = st.columns([3, 1])
+    
+    with col_month1:
+        # 기본값: 최신 월
+        default_month = all_available_months[0] if all_available_months else None
+        
+        # 월 선택 selectbox
+        selected_month = st.selectbox(
+            "분석 대상 월",
+            options=all_available_months,
+            index=0,
+            format_func=lambda x: f"{str(x)[:4]}년 {str(x)[4:6]}월",
+            key="bill_actual_month_selector"
+        )
+    
+    with col_month2:
+        st.metric("선택된 월", f"{str(selected_month)[:4]}.{str(selected_month)[4:6]}")
+    
+    st.markdown("---")
+    
+    # 기간 필터 제외한 필터 적용 (해당 월의 데이터만)
+    # 먼저 선택된 월의 데이터만 필터링
+    bills_for_month = bills_df[bills_df['yymm'] == selected_month].copy()
+    
+    # 기간 외 다른 필터 적용 (지역, 계약유형 등)
+    filters_no_period = filters.copy()
+    filters_no_period['yymm_list'] = []  # 기간 필터 제거
+    filtered_bills_month = apply_filters(bills_for_month, filters_no_period)
+    
     # Merge bills and actual with explicit suffixes
-    merged_bill_actual = filtered_bills.merge(
+    merged_bill_actual = filtered_bills_month.merge(
         actual_df,
         on=['yymm', 'site_id'],
         how='left',
@@ -484,81 +521,1313 @@ with tab3:
     )
     
     if len(merged_bill_actual) == 0:
-        st.warning("Bill vs Actual 비교 데이터가 없습니다.")
+        st.warning(f"선택한 월({str(selected_month)[:4]}년 {str(selected_month)[4:6]}월)에 해당하는 데이터가 없습니다.")
     else:
-        # Calculate error
-        merged_bill_actual['error_pct'] = merged_bill_actual.apply(
-            lambda row: calculate_bill_actual_error(row.get('kwh_actual', 0), row.get('kwh_bill', 0)),
-            axis=1
-        )
+        # === 개요 섹션 ===
+        st.markdown(f"### 📊 개요 ({str(selected_month)[:4]}년 {str(selected_month)[4:6]}월)")
         
-        # Classify mismatch
-        merged_bill_actual['mismatch_class'] = merged_bill_actual.apply(
-            classify_bill_actual_mismatch,
-            axis=1
-        )
+        # 청구서 기반 집계
+        total_kwh_bill = merged_bill_actual['kwh_bill'].sum()
+        total_cost_bill = merged_bill_actual['cost_bill'].sum()
         
-        # Distribution chart
-        st.markdown("### 오차 분포")
+        # 실사용 기반 집계
+        total_kwh_actual = merged_bill_actual['kwh_actual'].sum()
         
-        fig_dist = px.histogram(
-            merged_bill_actual[merged_bill_actual['error_pct'].notna()],
-            x='error_pct',
-            nbins=50,
-            title='Distribution of Bill vs Actual Error (%)',
-            labels={'error_pct': 'Error (%)'}
-        )
+        # 실사용 전력량 기반 추정 요금 계산
+        # 방법: 청구서의 평균 단가를 실사용 전력량에 적용
+        avg_unit_cost = total_cost_bill / total_kwh_bill if total_kwh_bill > 0 else 0
+        estimated_cost_from_actual = total_kwh_actual * avg_unit_cost
         
-        st.plotly_chart(fig_dist, use_container_width=True)
+        # 차이 계산
+        kwh_diff = total_kwh_actual - total_kwh_bill
+        kwh_diff_pct = (kwh_diff / total_kwh_bill * 100) if total_kwh_bill > 0 else 0
+        cost_diff = estimated_cost_from_actual - total_cost_bill
+        cost_diff_pct = (cost_diff / total_cost_bill * 100) if total_cost_bill > 0 else 0
         
-        # Classification summary
-        st.markdown("### 분류별 현황")
-        
-        class_summary = merged_bill_actual['mismatch_class'].value_counts().reset_index()
-        class_summary.columns = ['분류', '건수']
-        
-        col1, col2 = st.columns([1, 2])
+        # 4개 컬럼으로 주요 지표 표시
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.dataframe(class_summary, use_container_width=True, hide_index=True)
+            delta_str = f"{kwh_diff:+,.0f} kWh ({kwh_diff_pct:+.1f}%)"
+            render_simple_metric_card(
+                "청구서 전력량", 
+                f"{total_kwh_bill:,.0f} kWh",
+                help_text="청구서 기준 전력 사용량"
+            )
+            st.caption(f"📊 실사용: {total_kwh_actual:,.0f} kWh")
+            st.caption(f"📈 차이: {delta_str}")
         
         with col2:
-            fig_pie = px.pie(
-                class_summary,
-                names='분류',
-                values='건수',
-                title='Mismatch Classification'
+            delta_str = f"{kwh_diff:+,.0f} kWh ({kwh_diff_pct:+.1f}%)"
+            render_simple_metric_card(
+                "실사용 전력량",
+                f"{total_kwh_actual:,.0f} kWh",
+                delta=delta_str if kwh_diff != 0 else None,
+                help_text="계측 데이터 기준 실제 사용량"
             )
-            st.plotly_chart(fig_pie, use_container_width=True)
         
-        # Problem sites requiring action - ORANGE for attention needed
-        st.markdown(f'<h3 style="color: {PYLON_ORANGE};">⚠️ 조사 필요 국소</h3>', unsafe_allow_html=True)
+        with col3:
+            delta_str = f"{cost_diff:+,.0f} 원 ({cost_diff_pct:+.1f}%)"
+            render_simple_metric_card(
+                "청구서 요금",
+                f"₩{total_cost_bill:,.0f}",
+                help_text="실제 청구된 전기요금"
+            )
+            st.caption(f"📊 추정: ₩{estimated_cost_from_actual:,.0f}")
+            st.caption(f"📈 차이: {delta_str}")
         
-        problem_sites = merged_bill_actual[
-            merged_bill_actual['mismatch_class'].isin(['조사 필요', '긴급 조사'])
+        with col4:
+            delta_str = f"{cost_diff:+,.0f} 원 ({cost_diff_pct:+.1f}%)"
+            render_simple_metric_card(
+                "실사용 기반 추정 요금",
+                f"₩{estimated_cost_from_actual:,.0f}",
+                delta=delta_str if cost_diff != 0 else None,
+                help_text=f"실사용량 × 평균단가(₩{avg_unit_cost:.1f}/kWh)"
+            )
+        
+        st.markdown("---")
+        
+        # === 기준별 비교 그래프 ===
+        st.markdown(f"### 📊 기준별 비교 분석 ({str(selected_month)[:4]}년 {str(selected_month)[4:6]}월)")
+        st.markdown("다양한 기준으로 청구서와 실사용량을 비교합니다.")
+        
+        # Merge with site_master to get site_type
+        merged_with_site = merged_bill_actual.merge(
+            site_master[['site_id', 'site_type', 'voltage']],
+            on='site_id',
+            how='left'
+        )
+        
+        # Create tabs for different comparison criteria
+        comp_tab1, comp_tab2, comp_tab3, comp_tab4, comp_tab5, comp_tab6 = st.tabs([
+            "🗺️ 지역별", "🏢 설비유형별", "📋 계약대상별", "💰 계약유형별", "📡 세대별", "⚡ RAPA여부별"
+        ])
+        
+        with comp_tab1:
+            st.markdown("#### 지역별 청구서 vs 실사용량 비교")
+            
+            # Aggregate by region
+            region_agg = merged_with_site.groupby('region').agg({
+                'kwh_bill': 'sum',
+                'kwh_actual': 'sum',
+                'cost_bill': 'sum'
+            }).reset_index()
+            
+            # Calculate estimated cost from actual
+            region_agg['cost_actual_est'] = region_agg['kwh_actual'] * avg_unit_cost
+            
+            # Create comparison chart
+            fig_region = go.Figure()
+            
+            fig_region.add_trace(go.Bar(
+                name='청구서 전력량',
+                x=region_agg['region'],
+                y=region_agg['kwh_bill'],
+                marker_color=PYLON_BLUE,
+                text=region_agg['kwh_bill'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_region.add_trace(go.Bar(
+                name='실사용 전력량',
+                x=region_agg['region'],
+                y=region_agg['kwh_actual'],
+                marker_color=PYLON_ORANGE,
+                text=region_agg['kwh_actual'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_region.update_layout(
+                title='지역별 전력량 비교 (kWh)',
+                xaxis_title='지역',
+                yaxis_title='전력량 (kWh)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_region, use_container_width=True)
+            
+            # Cost comparison
+            fig_region_cost = go.Figure()
+            
+            fig_region_cost.add_trace(go.Bar(
+                name='청구서 요금',
+                x=region_agg['region'],
+                y=region_agg['cost_bill'],
+                marker_color=PYLON_BLUE,
+                text=region_agg['cost_bill'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_region_cost.add_trace(go.Bar(
+                name='실사용 기반 추정 요금',
+                x=region_agg['region'],
+                y=region_agg['cost_actual_est'],
+                marker_color=PYLON_ORANGE,
+                text=region_agg['cost_actual_est'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_region_cost.update_layout(
+                title='지역별 요금 비교 (원)',
+                xaxis_title='지역',
+                yaxis_title='요금 (원)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_region_cost, use_container_width=True)
+            
+            with st.expander("📊 상세 데이터"):
+                region_agg['kwh_diff'] = region_agg['kwh_actual'] - region_agg['kwh_bill']
+                region_agg['kwh_diff_pct'] = (region_agg['kwh_diff'] / region_agg['kwh_bill'] * 100).round(2)
+                region_agg['cost_diff'] = region_agg['cost_actual_est'] - region_agg['cost_bill']
+                region_agg['cost_diff_pct'] = (region_agg['cost_diff'] / region_agg['cost_bill'] * 100).round(2)
+                st.dataframe(region_agg, use_container_width=True, hide_index=True)
+        
+        with comp_tab2:
+            st.markdown("#### 설비유형별 청구서 vs 실사용량 비교")
+            
+            # Aggregate by site_type
+            site_type_agg = merged_with_site.groupby('site_type').agg({
+                'kwh_bill': 'sum',
+                'kwh_actual': 'sum',
+                'cost_bill': 'sum'
+            }).reset_index()
+            
+            site_type_agg['cost_actual_est'] = site_type_agg['kwh_actual'] * avg_unit_cost
+            
+            fig_site_type = go.Figure()
+            
+            fig_site_type.add_trace(go.Bar(
+                name='청구서 전력량',
+                x=site_type_agg['site_type'],
+                y=site_type_agg['kwh_bill'],
+                marker_color=PYLON_BLUE,
+                text=site_type_agg['kwh_bill'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_site_type.add_trace(go.Bar(
+                name='실사용 전력량',
+                x=site_type_agg['site_type'],
+                y=site_type_agg['kwh_actual'],
+                marker_color=PYLON_ORANGE,
+                text=site_type_agg['kwh_actual'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_site_type.update_layout(
+                title='설비유형별 전력량 비교 (kWh)',
+                xaxis_title='설비유형',
+                yaxis_title='전력량 (kWh)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_site_type, use_container_width=True)
+            
+            # Cost comparison
+            fig_site_type_cost = go.Figure()
+            
+            fig_site_type_cost.add_trace(go.Bar(
+                name='청구서 요금',
+                x=site_type_agg['site_type'],
+                y=site_type_agg['cost_bill'],
+                marker_color=PYLON_BLUE,
+                text=site_type_agg['cost_bill'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_site_type_cost.add_trace(go.Bar(
+                name='실사용 기반 추정 요금',
+                x=site_type_agg['site_type'],
+                y=site_type_agg['cost_actual_est'],
+                marker_color=PYLON_ORANGE,
+                text=site_type_agg['cost_actual_est'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_site_type_cost.update_layout(
+                title='설비유형별 요금 비교 (원)',
+                xaxis_title='설비유형',
+                yaxis_title='요금 (원)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_site_type_cost, use_container_width=True)
+            
+            with st.expander("📊 상세 데이터"):
+                site_type_agg['kwh_diff'] = site_type_agg['kwh_actual'] - site_type_agg['kwh_bill']
+                site_type_agg['kwh_diff_pct'] = (site_type_agg['kwh_diff'] / site_type_agg['kwh_bill'] * 100).round(2)
+                site_type_agg['cost_diff'] = site_type_agg['cost_actual_est'] - site_type_agg['cost_bill']
+                site_type_agg['cost_diff_pct'] = (site_type_agg['cost_diff'] / site_type_agg['cost_bill'] * 100).round(2)
+                st.dataframe(site_type_agg, use_container_width=True, hide_index=True)
+        
+        with comp_tab3:
+            st.markdown("#### 계약대상별 청구서 vs 실사용량 비교")
+            
+            # Aggregate by contract_target
+            contract_target_agg = merged_with_site.groupby('contract_target').agg({
+                'kwh_bill': 'sum',
+                'kwh_actual': 'sum',
+                'cost_bill': 'sum'
+            }).reset_index()
+            
+            contract_target_agg['cost_actual_est'] = contract_target_agg['kwh_actual'] * avg_unit_cost
+            
+            fig_contract_target = go.Figure()
+            
+            fig_contract_target.add_trace(go.Bar(
+                name='청구서 전력량',
+                x=contract_target_agg['contract_target'],
+                y=contract_target_agg['kwh_bill'],
+                marker_color=PYLON_BLUE,
+                text=contract_target_agg['kwh_bill'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_contract_target.add_trace(go.Bar(
+                name='실사용 전력량',
+                x=contract_target_agg['contract_target'],
+                y=contract_target_agg['kwh_actual'],
+                marker_color=PYLON_ORANGE,
+                text=contract_target_agg['kwh_actual'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_contract_target.update_layout(
+                title='계약대상별 전력량 비교 (kWh)',
+                xaxis_title='계약대상 (ME: 한전계약, MC: 건물계약)',
+                yaxis_title='전력량 (kWh)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_contract_target, use_container_width=True)
+            
+            # Cost comparison
+            fig_contract_target_cost = go.Figure()
+            
+            fig_contract_target_cost.add_trace(go.Bar(
+                name='청구서 요금',
+                x=contract_target_agg['contract_target'],
+                y=contract_target_agg['cost_bill'],
+                marker_color=PYLON_BLUE,
+                text=contract_target_agg['cost_bill'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_contract_target_cost.add_trace(go.Bar(
+                name='실사용 기반 추정 요금',
+                x=contract_target_agg['contract_target'],
+                y=contract_target_agg['cost_actual_est'],
+                marker_color=PYLON_ORANGE,
+                text=contract_target_agg['cost_actual_est'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_contract_target_cost.update_layout(
+                title='계약대상별 요금 비교 (원)',
+                xaxis_title='계약대상 (ME: 한전계약, MC: 건물계약)',
+                yaxis_title='요금 (원)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_contract_target_cost, use_container_width=True)
+            
+            with st.expander("📊 상세 데이터"):
+                contract_target_agg['kwh_diff'] = contract_target_agg['kwh_actual'] - contract_target_agg['kwh_bill']
+                contract_target_agg['kwh_diff_pct'] = (contract_target_agg['kwh_diff'] / contract_target_agg['kwh_bill'] * 100).round(2)
+                contract_target_agg['cost_diff'] = contract_target_agg['cost_actual_est'] - contract_target_agg['cost_bill']
+                contract_target_agg['cost_diff_pct'] = (contract_target_agg['cost_diff'] / contract_target_agg['cost_bill'] * 100).round(2)
+                st.dataframe(contract_target_agg, use_container_width=True, hide_index=True)
+        
+        with comp_tab4:
+            st.markdown("#### 계약유형별 청구서 vs 실사용량 비교")
+            
+            # Aggregate by contract_type
+            contract_type_agg = merged_with_site.groupby('contract_type').agg({
+                'kwh_bill': 'sum',
+                'kwh_actual': 'sum',
+                'cost_bill': 'sum'
+            }).reset_index()
+            
+            contract_type_agg['cost_actual_est'] = contract_type_agg['kwh_actual'] * avg_unit_cost
+            
+            fig_contract_type = go.Figure()
+            
+            fig_contract_type.add_trace(go.Bar(
+                name='청구서 전력량',
+                x=contract_type_agg['contract_type'],
+                y=contract_type_agg['kwh_bill'],
+                marker_color=PYLON_BLUE,
+                text=contract_type_agg['kwh_bill'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_contract_type.add_trace(go.Bar(
+                name='실사용 전력량',
+                x=contract_type_agg['contract_type'],
+                y=contract_type_agg['kwh_actual'],
+                marker_color=PYLON_ORANGE,
+                text=contract_type_agg['kwh_actual'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_contract_type.update_layout(
+                title='계약유형별 전력량 비교 (kWh)',
+                xaxis_title='계약유형',
+                yaxis_title='전력량 (kWh)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_contract_type, use_container_width=True)
+            
+            # Cost comparison
+            fig_contract_type_cost = go.Figure()
+            
+            fig_contract_type_cost.add_trace(go.Bar(
+                name='청구서 요금',
+                x=contract_type_agg['contract_type'],
+                y=contract_type_agg['cost_bill'],
+                marker_color=PYLON_BLUE,
+                text=contract_type_agg['cost_bill'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_contract_type_cost.add_trace(go.Bar(
+                name='실사용 기반 추정 요금',
+                x=contract_type_agg['contract_type'],
+                y=contract_type_agg['cost_actual_est'],
+                marker_color=PYLON_ORANGE,
+                text=contract_type_agg['cost_actual_est'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_contract_type_cost.update_layout(
+                title='계약유형별 요금 비교 (원)',
+                xaxis_title='계약유형',
+                yaxis_title='요금 (원)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_contract_type_cost, use_container_width=True)
+            
+            with st.expander("📊 상세 데이터"):
+                contract_type_agg['kwh_diff'] = contract_type_agg['kwh_actual'] - contract_type_agg['kwh_bill']
+                contract_type_agg['kwh_diff_pct'] = (contract_type_agg['kwh_diff'] / contract_type_agg['kwh_bill'] * 100).round(2)
+                contract_type_agg['cost_diff'] = contract_type_agg['cost_actual_est'] - contract_type_agg['cost_bill']
+                contract_type_agg['cost_diff_pct'] = (contract_type_agg['cost_diff'] / contract_type_agg['cost_bill'] * 100).round(2)
+                st.dataframe(contract_type_agg, use_container_width=True, hide_index=True)
+        
+        with comp_tab5:
+            st.markdown("#### 세대별 청구서 vs 실사용량 비교")
+            
+            # Aggregate by network_gen
+            network_gen_agg = merged_with_site.groupby('network_gen').agg({
+                'kwh_bill': 'sum',
+                'kwh_actual': 'sum',
+                'cost_bill': 'sum'
+            }).reset_index()
+            
+            network_gen_agg['cost_actual_est'] = network_gen_agg['kwh_actual'] * avg_unit_cost
+            
+            fig_network_gen = go.Figure()
+            
+            fig_network_gen.add_trace(go.Bar(
+                name='청구서 전력량',
+                x=network_gen_agg['network_gen'],
+                y=network_gen_agg['kwh_bill'],
+                marker_color=PYLON_BLUE,
+                text=network_gen_agg['kwh_bill'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_network_gen.add_trace(go.Bar(
+                name='실사용 전력량',
+                x=network_gen_agg['network_gen'],
+                y=network_gen_agg['kwh_actual'],
+                marker_color=PYLON_ORANGE,
+                text=network_gen_agg['kwh_actual'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_network_gen.update_layout(
+                title='세대별 전력량 비교 (kWh)',
+                xaxis_title='세대 (3G/LTE/5G)',
+                yaxis_title='전력량 (kWh)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_network_gen, use_container_width=True)
+            
+            # Cost comparison
+            fig_network_gen_cost = go.Figure()
+            
+            fig_network_gen_cost.add_trace(go.Bar(
+                name='청구서 요금',
+                x=network_gen_agg['network_gen'],
+                y=network_gen_agg['cost_bill'],
+                marker_color=PYLON_BLUE,
+                text=network_gen_agg['cost_bill'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_network_gen_cost.add_trace(go.Bar(
+                name='실사용 기반 추정 요금',
+                x=network_gen_agg['network_gen'],
+                y=network_gen_agg['cost_actual_est'],
+                marker_color=PYLON_ORANGE,
+                text=network_gen_agg['cost_actual_est'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_network_gen_cost.update_layout(
+                title='세대별 요금 비교 (원)',
+                xaxis_title='세대 (3G/LTE/5G)',
+                yaxis_title='요금 (원)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_network_gen_cost, use_container_width=True)
+            
+            with st.expander("📊 상세 데이터"):
+                network_gen_agg['kwh_diff'] = network_gen_agg['kwh_actual'] - network_gen_agg['kwh_bill']
+                network_gen_agg['kwh_diff_pct'] = (network_gen_agg['kwh_diff'] / network_gen_agg['kwh_bill'] * 100).round(2)
+                network_gen_agg['cost_diff'] = network_gen_agg['cost_actual_est'] - network_gen_agg['cost_bill']
+                network_gen_agg['cost_diff_pct'] = (network_gen_agg['cost_diff'] / network_gen_agg['cost_bill'] * 100).round(2)
+                st.dataframe(network_gen_agg, use_container_width=True, hide_index=True)
+        
+        with comp_tab6:
+            st.markdown("#### RAPA여부별 청구서 vs 실사용량 비교")
+            
+            # Aggregate by rapa_type
+            rapa_agg = merged_with_site.groupby('rapa_type').agg({
+                'kwh_bill': 'sum',
+                'kwh_actual': 'sum',
+                'cost_bill': 'sum'
+            }).reset_index()
+            
+            rapa_agg['cost_actual_est'] = rapa_agg['kwh_actual'] * avg_unit_cost
+            
+            fig_rapa = go.Figure()
+            
+            fig_rapa.add_trace(go.Bar(
+                name='청구서 전력량',
+                x=rapa_agg['rapa_type'],
+                y=rapa_agg['kwh_bill'],
+                marker_color=PYLON_BLUE,
+                text=rapa_agg['kwh_bill'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_rapa.add_trace(go.Bar(
+                name='실사용 전력량',
+                x=rapa_agg['rapa_type'],
+                y=rapa_agg['kwh_actual'],
+                marker_color=PYLON_ORANGE,
+                text=rapa_agg['kwh_actual'].apply(lambda x: f"{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_rapa.update_layout(
+                title='RAPA여부별 전력량 비교 (kWh)',
+                xaxis_title='RAPA여부',
+                yaxis_title='전력량 (kWh)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_rapa, use_container_width=True)
+            
+            # Cost comparison
+            fig_rapa_cost = go.Figure()
+            
+            fig_rapa_cost.add_trace(go.Bar(
+                name='청구서 요금',
+                x=rapa_agg['rapa_type'],
+                y=rapa_agg['cost_bill'],
+                marker_color=PYLON_BLUE,
+                text=rapa_agg['cost_bill'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_rapa_cost.add_trace(go.Bar(
+                name='실사용 기반 추정 요금',
+                x=rapa_agg['rapa_type'],
+                y=rapa_agg['cost_actual_est'],
+                marker_color=PYLON_ORANGE,
+                text=rapa_agg['cost_actual_est'].apply(lambda x: f"₩{x:,.0f}"),
+                textposition='outside'
+            ))
+            
+            fig_rapa_cost.update_layout(
+                title='RAPA여부별 요금 비교 (원)',
+                xaxis_title='RAPA여부',
+                yaxis_title='요금 (원)',
+                barmode='group',
+                height=400,
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_rapa_cost, use_container_width=True)
+            
+            with st.expander("📊 상세 데이터"):
+                rapa_agg['kwh_diff'] = rapa_agg['kwh_actual'] - rapa_agg['kwh_bill']
+                rapa_agg['kwh_diff_pct'] = (rapa_agg['kwh_diff'] / rapa_agg['kwh_bill'] * 100).round(2)
+                rapa_agg['cost_diff'] = rapa_agg['cost_actual_est'] - rapa_agg['cost_bill']
+                rapa_agg['cost_diff_pct'] = (rapa_agg['cost_diff'] / rapa_agg['cost_bill'] * 100).round(2)
+                st.dataframe(rapa_agg, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
+        
+        # === 국소별 청구 상태 분석 ===
+        st.markdown(f"### 📌 국소별 청구 상태 분석 ({str(selected_month)[:4]}년 {str(selected_month)[4:6]}월)")
+        
+        # 국소별 오차율 계산 (실사용량이 있는 국소만)
+        site_analysis = merged_bill_actual[
+            (merged_bill_actual['kwh_actual'] > 0) & 
+            (merged_bill_actual['kwh_bill'] > 0)
         ].copy()
         
-        if len(problem_sites) > 0:
-            # Select available columns (region comes from filtered_bills)
-            display_cols = ['site_id', 'region', 'contract_type', 'kwh_bill', 'kwh_actual', 'error_pct', 'mismatch_class']
-            available_cols = [col for col in display_cols if col in problem_sites.columns]
-            
-            problem_display = problem_sites[available_cols].sort_values('error_pct', key=abs, ascending=False).head(20)
-            
-            # Widget card for action creation
-            render_widget_card(
-                title="Bill vs Actual 불일치 국소",
-                value=f"{len(problem_sites)} 건",
-                metric_label="조사 필요 국소 수",
-                validation_state=ValidationState.IN_FLIGHT,
-                evidence_table=problem_display,
-                action_manager=action_manager,
-                action_category=ActionCategory.BILL_ACTUAL_MISMATCH,
-                action_description_template=f"Bill vs Actual 오차 조사 필요 ({len(problem_sites)}개 국소)",
-                site_ids=problem_sites['site_id'].tolist()
+        # 오차율 계산: (청구서 - 실사용량) / 실사용량 * 100
+        site_analysis['billing_error_pct'] = (
+            (site_analysis['kwh_bill'] - site_analysis['kwh_actual']) / 
+            site_analysis['kwh_actual'] * 100
+        )
+        
+        # 분류 기준 (±5% 이내는 정상)
+        def classify_billing_status(error_pct):
+            if pd.isna(error_pct):
+                return '데이터 없음'
+            elif error_pct > 5:
+                return '과대청구'
+            elif error_pct < -5:
+                return '과소청구'
+            else:
+                return '정상'
+        
+        site_analysis['billing_status'] = site_analysis['billing_error_pct'].apply(classify_billing_status)
+        
+        # 집계
+        status_counts = site_analysis['billing_status'].value_counts()
+        total_sites = len(site_analysis)
+        
+        # 3개 컬럼으로 통계 표시
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            over_count = status_counts.get('과대청구', 0)
+            over_pct = (over_count / total_sites * 100) if total_sites > 0 else 0
+            render_simple_metric_card(
+                "과대청구 국소",
+                f"{over_count:,} 개소",
+                delta=f"{over_pct:.1f}%",
+                help_text="청구서가 실사용량보다 5% 이상 많은 국소"
             )
+        
+        with col2:
+            normal_count = status_counts.get('정상', 0)
+            normal_pct = (normal_count / total_sites * 100) if total_sites > 0 else 0
+            render_simple_metric_card(
+                "정상 국소",
+                f"{normal_count:,} 개소",
+                delta=f"{normal_pct:.1f}%",
+                help_text="청구서와 실사용량 차이가 ±5% 이내인 국소"
+            )
+        
+        with col3:
+            under_count = status_counts.get('과소청구', 0)
+            under_pct = (under_count / total_sites * 100) if total_sites > 0 else 0
+            render_simple_metric_card(
+                "과소청구 국소",
+                f"{under_count:,} 개소",
+                delta=f"{under_pct:.1f}%",
+                help_text="청구서가 실사용량보다 5% 이상 적은 국소"
+            )
+        
+        # 파이 차트로 비율 시각화
+        st.markdown("#### 청구 상태 분포")
+        
+        # 색상 매핑
+        color_map = {
+            '과대청구': '#E74C3C',  # 빨강
+            '정상': '#27AE60',      # 녹색
+            '과소청구': '#F39C12',  # 주황
+            '데이터 없음': '#95A5A6'  # 회색
+        }
+        
+        # 전체 청구 상태 분포 차트
+        if len(status_counts) > 0:
+            fig_pie = go.Figure(data=[go.Pie(
+                labels=status_counts.index,
+                values=status_counts.values,
+                marker=dict(colors=[color_map.get(status, '#95A5A6') for status in status_counts.index]),
+                textinfo='label+percent+value',
+                texttemplate='%{label}<br>%{value}개소<br>(%{percent})',
+                hole=0.3  # 도넛 차트
+            )])
+            
+            fig_pie.update_layout(
+                title='국소 개수 기준 청구 상태 분포',
+                height=400,
+                showlegend=True,
+                legend=dict(
+                    orientation="v",
+                    yanchor="middle",
+                    y=0.5,
+                    xanchor="left",
+                    x=1.1
+                )
+            )
+            
+            st.plotly_chart(fig_pie, use_container_width=True)
+        
+        # 과대청구 국소 상세 분석
+        st.markdown("#### 과대청구 국소 상세 분석")
+        
+        # 과대청구 국소만 필터링
+        overcharged_sites = site_analysis[site_analysis['billing_status'] == '과대청구'].copy()
+        
+        if len(overcharged_sites) > 0:
+            # site_master 정보 병합
+            overcharged_with_info = overcharged_sites.merge(
+                site_master[['site_id', 'site_type', 'voltage']],
+                on='site_id',
+                how='left'
+            )
+            
+            # 2x3 그리드로 6개 기준별 도넛 차트 생성
+            col_d1, col_d2, col_d3 = st.columns(3)
+            
+            with col_d1:
+                # 지역별
+                region_counts = overcharged_with_info['region'].value_counts()
+                fig_region = go.Figure(data=[go.Pie(
+                    labels=region_counts.index,
+                    values=region_counts.values,
+                    textinfo='label+value',
+                    texttemplate='%{label}<br>%{value}개소',
+                    hole=0.4
+                )])
+                fig_region.update_layout(
+                    title='지역별 과대청구 국소',
+                    height=300,
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=40, b=20)
+                )
+                st.plotly_chart(fig_region, use_container_width=True)
+            
+            with col_d2:
+                # 설비유형별
+                site_type_counts = overcharged_with_info['site_type'].value_counts()
+                fig_site_type = go.Figure(data=[go.Pie(
+                    labels=site_type_counts.index,
+                    values=site_type_counts.values,
+                    textinfo='label+value',
+                    texttemplate='%{label}<br>%{value}개소',
+                    hole=0.4
+                )])
+                fig_site_type.update_layout(
+                    title='설비유형별 과대청구 국소',
+                    height=300,
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=40, b=20)
+                )
+                st.plotly_chart(fig_site_type, use_container_width=True)
+            
+            with col_d3:
+                # 계약대상별
+                contract_target_counts = overcharged_with_info['contract_target'].value_counts()
+                fig_contract_target = go.Figure(data=[go.Pie(
+                    labels=contract_target_counts.index,
+                    values=contract_target_counts.values,
+                    textinfo='label+value',
+                    texttemplate='%{label}<br>%{value}개소',
+                    hole=0.4
+                )])
+                fig_contract_target.update_layout(
+                    title='계약대상별 과대청구 국소',
+                    height=300,
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=40, b=20)
+                )
+                st.plotly_chart(fig_contract_target, use_container_width=True)
+            
+            col_d4, col_d5, col_d6 = st.columns(3)
+            
+            with col_d4:
+                # 계약유형별
+                contract_type_counts = overcharged_with_info['contract_type'].value_counts()
+                fig_contract_type = go.Figure(data=[go.Pie(
+                    labels=contract_type_counts.index,
+                    values=contract_type_counts.values,
+                    textinfo='label+value',
+                    texttemplate='%{label}<br>%{value}개소',
+                    hole=0.4
+                )])
+                fig_contract_type.update_layout(
+                    title='계약유형별 과대청구 국소',
+                    height=300,
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=40, b=20)
+                )
+                st.plotly_chart(fig_contract_type, use_container_width=True)
+            
+            with col_d5:
+                # 세대별
+                network_gen_counts = overcharged_with_info['network_gen'].value_counts()
+                fig_network_gen = go.Figure(data=[go.Pie(
+                    labels=network_gen_counts.index,
+                    values=network_gen_counts.values,
+                    textinfo='label+value',
+                    texttemplate='%{label}<br>%{value}개소',
+                    hole=0.4
+                )])
+                fig_network_gen.update_layout(
+                    title='세대별 과대청구 국소',
+                    height=300,
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=40, b=20)
+                )
+                st.plotly_chart(fig_network_gen, use_container_width=True)
+            
+            with col_d6:
+                # RAPA여부별
+                rapa_counts = overcharged_with_info['rapa_type'].value_counts()
+                fig_rapa = go.Figure(data=[go.Pie(
+                    labels=rapa_counts.index,
+                    values=rapa_counts.values,
+                    textinfo='label+value',
+                    texttemplate='%{label}<br>%{value}개소',
+                    hole=0.4
+                )])
+                fig_rapa.update_layout(
+                    title='RAPA여부별 과대청구 국소',
+                    height=300,
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=40, b=20)
+                )
+                st.plotly_chart(fig_rapa, use_container_width=True)
         else:
-            st.success("✅ 조사가 필요한 국소가 없습니다.")
+            st.info("과대청구 국소가 없습니다.")
+        
+        # 상세 통계 테이블
+        with st.expander("📊 상세 통계"):
+            stats_table = pd.DataFrame({
+                '청구 상태': status_counts.index,
+                '국소 개수': status_counts.values,
+                '비율 (%)': (status_counts.values / total_sites * 100).round(2),
+                '기준': ['청구서가 실사용량보다 5% 초과', 
+                        '청구서와 실사용량 차이 ±5% 이내',
+                        '청구서가 실사용량보다 5% 미만',
+                        '실사용량 데이터 없음'][:len(status_counts)]
+            })
+            st.dataframe(stats_table, use_container_width=True, hide_index=True)
+            
+            # 추가 통계
+            st.markdown("**📈 오차율 통계**")
+            col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+            
+            with col_s1:
+                st.metric("평균 오차율", f"{site_analysis['billing_error_pct'].mean():.2f}%")
+            with col_s2:
+                st.metric("중앙값 오차율", f"{site_analysis['billing_error_pct'].median():.2f}%")
+            with col_s3:
+                st.metric("최대 오차율", f"{site_analysis['billing_error_pct'].max():.2f}%")
+            with col_s4:
+                st.metric("최소 오차율", f"{site_analysis['billing_error_pct'].min():.2f}%")
+        
+        st.markdown("---")
+        
+        st.markdown("---")
+        
+        # === 과대청구 국소 리스트 ===
+        st.markdown(f'<h3 style="color: {PYLON_ORANGE};">⚠️ 과대청구 국소 리스트 ({str(selected_month)[:4]}년 {str(selected_month)[4:6]}월)</h3>', unsafe_allow_html=True)
+        
+        # 검토/점검 상태 초기화 (session_state)
+        if 'site_review_status' not in st.session_state:
+            st.session_state['site_review_status'] = {}
+        
+        # 과대청구 국소만 필터링 (site_analysis에서 이미 계산됨)
+        overcharged_list = site_analysis[site_analysis['billing_status'] == '과대청구'].copy()
+        
+        if len(overcharged_list) > 0:
+            # site_master 정보 추가
+            overcharged_list = overcharged_list.merge(
+                site_master[['site_id', 'site_type', 'site_name', 'voltage']],
+                on='site_id',
+                how='left'
+            )
+            
+            # 실사용 전력량 기반 추정 청구 요금 계산
+            overcharged_list['estimated_cost'] = overcharged_list['kwh_actual'] * avg_unit_cost
+            
+            # 과대청구 금액 계산 (추정청구요금 - 실제청구요금)
+            # 음수 = 실제 청구가 더 많음 (과대청구)
+            overcharged_list['overcharge_amount'] = overcharged_list['estimated_cost'] - overcharged_list['cost_bill']
+            
+            # 과대청구 금액의 절댓값이 큰 순으로 정렬 (실제로는 음수이므로 ascending=True)
+            overcharged_list = overcharged_list.sort_values('overcharge_amount', ascending=True)
+            
+            # 검토/점검 상태 추가
+            def get_review_status(site_id):
+                status = st.session_state['site_review_status'].get(site_id, {})
+                reviewed = "✅" if status.get('reviewed', False) else "❌"
+                inspected = "✅" if status.get('inspected', False) else "❌"
+                return reviewed, inspected
+            
+            overcharged_list['review_status'] = overcharged_list['site_id'].apply(
+                lambda x: get_review_status(x)[0]
+            )
+            overcharged_list['inspection_status'] = overcharged_list['site_id'].apply(
+                lambda x: get_review_status(x)[1]
+            )
+            
+            # 표시할 컬럼 선택
+            display_cols = [
+                'site_id', 'site_name', 'region', 'site_type', 'contract_type', 
+                'kwh_bill', 'kwh_actual', 'cost_bill', 'estimated_cost', 
+                'overcharge_amount', 'billing_error_pct', 'review_status', 'inspection_status'
+            ]
+            available_cols = [col for col in display_cols if col in overcharged_list.columns]
+            
+            overcharged_display = overcharged_list[available_cols].copy()
+            
+            # 컬럼명 한글화
+            column_rename = {
+                'site_id': '국소ID',
+                'site_name': '국소명',
+                'region': '지역',
+                'site_type': '설비유형',
+                'contract_type': '계약유형',
+                'kwh_bill': '청구서 전력량(kWh)',
+                'kwh_actual': '실사용 전력량(kWh)',
+                'cost_bill': '청구 요금(원)',
+                'estimated_cost': '추정 요금(원)',
+                'overcharge_amount': '과대청구 금액(원)',
+                'billing_error_pct': '과대청구율(%)',
+                'review_status': '검토',
+                'inspection_status': '점검'
+            }
+            overcharged_display.rename(columns=column_rename, inplace=True)
+            
+            # 요약 정보
+            total_overcharge = abs(overcharged_list['overcharge_amount'].sum())
+            avg_overcharge = abs(overcharged_list['overcharge_amount'].mean())
+            max_overcharge = abs(overcharged_list['overcharge_amount'].min())  # min이 가장 큰 음수
+            
+            # 검토/점검 통계
+            reviewed_count = sum(1 for site_id in overcharged_list['site_id'] 
+                                if st.session_state['site_review_status'].get(site_id, {}).get('reviewed', False))
+            inspected_count = sum(1 for site_id in overcharged_list['site_id'] 
+                                 if st.session_state['site_review_status'].get(site_id, {}).get('inspected', False))
+            
+            st.markdown(f"""
+            **📊 과대청구 국소 현황**
+            - 총 **{len(overcharged_list)}개 국소**에서 과대청구 발생 (청구서가 실사용량보다 5% 이상 많음)
+            - 총 과대청구 금액: **₩{total_overcharge:,.0f}** (실사용 기준 추정 대비)
+            - 평균 과대청구 금액: **₩{avg_overcharge:,.0f}** / 최대: **₩{max_overcharge:,.0f}**
+            - 평균 과대청구율: **{overcharged_list['billing_error_pct'].mean():.2f}%** / 최대: **{overcharged_list['billing_error_pct'].max():.2f}%**
+            
+            **✅ 작업 진행 현황**
+            - 검토 완료: **{reviewed_count}개** / {len(overcharged_list)}개 ({reviewed_count/len(overcharged_list)*100:.1f}%)
+            - 점검 완료: **{inspected_count}개** / {len(overcharged_list)}개 ({inspected_count/len(overcharged_list)*100:.1f}%)
+            
+            ⚠️ **정렬 기준**: 과대청구 금액이 큰 순서로 표시 (금액 영향도 기준)
+            """)
+            
+            st.markdown("---")
+            
+            # 상위 20개만 표시 옵션
+            show_all = st.checkbox("전체 국소 표시", value=False, key="show_all_overcharged")
+            
+            if show_all:
+                display_df = overcharged_display
+                st.markdown(f"**전체 {len(display_df)}개 과대청구 국소** (과대청구 금액 큰 순)")
+            else:
+                display_df = overcharged_display.head(20)
+                st.markdown(f"**상위 20개 과대청구 국소** (과대청구 금액 큰 순)")
+            
+            # 데이터 테이블 표시
+            st.dataframe(
+                display_df.style.format({
+                    '청구서 전력량(kWh)': '{:,.0f}',
+                    '실사용 전력량(kWh)': '{:,.0f}',
+                    '청구 요금(원)': '₩{:,.0f}',
+                    '추정 요금(원)': '₩{:,.0f}',
+                    '과대청구 금액(원)': '₩{:,.0f}',
+                    '과대청구율(%)': '{:+.2f}'
+                }),
+                use_container_width=True,
+                hide_index=True,
+                height=600
+            )
+            
+            # CSV 다운로드 버튼
+            st.markdown("---")
+            csv = overcharged_display.to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label="📥 과대청구 국소 리스트 다운로드 (CSV)",
+                data=csv,
+                file_name=f"과대청구_국소_{str(selected_month)}.csv",
+                mime="text/csv",
+                key="download_overcharged_csv"
+            )
+            
+            # === 국소 상세보기 ===
+            st.markdown("---")
+            st.markdown("### 🔍 국소 상세보기")
+            
+            col_select1, col_select2 = st.columns([2, 1])
+            
+            with col_select1:
+                # 국소 선택 (국소ID + 국소명 형식)
+                site_options = overcharged_list.apply(
+                    lambda row: f"{row['site_id']} - {row['site_name']} ({row['region']})", 
+                    axis=1
+                ).tolist()
+                site_ids = overcharged_list['site_id'].tolist()
+                
+                selected_site_display = st.selectbox(
+                    "상세 정보를 볼 국소를 선택하세요",
+                    options=site_options,
+                    key="site_detail_selector"
+                )
+                
+                # 선택된 국소 ID 추출
+                selected_site_id = site_ids[site_options.index(selected_site_display)]
+            
+            with col_select2:
+                st.metric("선택된 국소", selected_site_id)
+            
+            # 선택된 국소의 상세 정보
+            if selected_site_id:
+                site_detail = overcharged_list[overcharged_list['site_id'] == selected_site_id].iloc[0]
+                
+                st.markdown("---")
+                
+                # 지도와 기본 정보를 나란히 표시
+                col_map, col_info = st.columns([1, 1])
+                
+                with col_map:
+                    st.markdown("**🗺️ 위치 정보**")
+                    
+                    # 국소의 좌표 정보 가져오기
+                    site_master_detail = site_master[site_master['site_id'] == selected_site_id].iloc[0]
+                    
+                    if 'latitude' in site_master_detail and 'longitude' in site_master_detail:
+                        # 지도 데이터 준비
+                        map_data = pd.DataFrame({
+                            'lat': [site_master_detail['latitude']],
+                            'lon': [site_master_detail['longitude']]
+                        })
+                        
+                        # 지도 표시
+                        st.map(map_data, zoom=13, use_container_width=True)
+                        
+                        # 주소 정보
+                        if 'address' in site_master_detail:
+                            st.info(f"📍 **주소**: {site_master_detail['address']}")
+                            st.caption(f"위도: {site_master_detail['latitude']:.6f}, 경도: {site_master_detail['longitude']:.6f}")
+                    else:
+                        st.info("위치 정보가 없습니다.")
+                
+                with col_info:
+                    st.markdown("**📍 기본 정보**")
+                    st.write(f"**국소ID**: {site_detail['site_id']}")
+                    st.write(f"**국소명**: {site_detail['site_name']}")
+                    st.write(f"**지역**: {site_detail['region']}")
+                    st.write(f"**설비유형**: {site_detail['site_type']}")
+                    st.write(f"**전압**: {site_master_detail.get('voltage', 'N/A')}")
+                    
+                    st.markdown("**📋 계약 정보**")
+                    st.write(f"**계약유형**: {site_detail['contract_type']}")
+                    st.write(f"**계약대상**: {site_detail['contract_target']}")
+                    st.write(f"**세대**: {site_detail['network_gen']}")
+                    st.write(f"**RAPA**: {site_detail['rapa_type']}")
+                
+                st.markdown("---")
+                
+                # 전력 및 요금 정보
+                col_d3, col_d4 = st.columns(2)
+                
+                with col_d3:
+                    st.markdown("**⚡ 전력 정보**")
+                    st.metric("청구서 전력량", f"{site_detail['kwh_bill']:,.0f} kWh")
+                    st.metric("실사용 전력량", f"{site_detail['kwh_actual']:,.0f} kWh")
+                
+                with col_d4:
+                    st.markdown("**💰 요금 정보**")
+                    st.metric("청구 요금", f"₩{site_detail['cost_bill']:,.0f}")
+                    st.metric("추정 요금", f"₩{site_detail['estimated_cost']:,.0f}")
+                
+                # 검토/점검 상태 관리
+                st.markdown("---")
+                st.markdown("#### ✏️ 검토 및 점검 관리")
+                
+                # 현재 국소의 상태 가져오기
+                current_status = st.session_state['site_review_status'].get(
+                    selected_site_id, 
+                    {'reviewed': False, 'inspected': False, 'reviewer': '', 'inspector': '', 
+                     'review_date': '', 'inspection_date': '', 'notes': ''}
+                )
+                
+                col_check1, col_check2 = st.columns(2)
+                
+                with col_check1:
+                    st.markdown("**📋 검토 상태**")
+                    reviewed = st.checkbox(
+                        "검토 완료",
+                        value=current_status['reviewed'],
+                        key=f"reviewed_{selected_site_id}"
+                    )
+                    
+                    if reviewed:
+                        reviewer = st.text_input(
+                            "검토자",
+                            value=current_status.get('reviewer', ''),
+                            key=f"reviewer_{selected_site_id}"
+                        )
+                        # 날짜 안전 처리
+                        try:
+                            default_date = pd.to_datetime(current_status.get('review_date')) if current_status.get('review_date') else pd.Timestamp.now()
+                        except:
+                            default_date = pd.Timestamp.now()
+                        
+                        review_date = st.date_input(
+                            "검토 일자",
+                            value=default_date,
+                            key=f"review_date_{selected_site_id}"
+                        )
+                    else:
+                        reviewer = ''
+                        review_date = ''
+                
+                with col_check2:
+                    st.markdown("**🔧 점검 상태**")
+                    inspected = st.checkbox(
+                        "점검 완료",
+                        value=current_status['inspected'],
+                        key=f"inspected_{selected_site_id}"
+                    )
+                    
+                    if inspected:
+                        inspector = st.text_input(
+                            "점검자",
+                            value=current_status.get('inspector', ''),
+                            key=f"inspector_{selected_site_id}"
+                        )
+                        # 날짜 안전 처리
+                        try:
+                            default_date = pd.to_datetime(current_status.get('inspection_date')) if current_status.get('inspection_date') else pd.Timestamp.now()
+                        except:
+                            default_date = pd.Timestamp.now()
+                        
+                        inspection_date = st.date_input(
+                            "점검 일자",
+                            value=default_date,
+                            key=f"inspection_date_{selected_site_id}"
+                        )
+                    else:
+                        inspector = ''
+                        inspection_date = ''
+                
+                # 메모
+                notes = st.text_area(
+                    "특이사항 메모",
+                    value=current_status.get('notes', ''),
+                    height=100,
+                    key=f"notes_{selected_site_id}",
+                    help="과대청구 원인, 조치 내용 등을 기록하세요"
+                )
+                
+                # 저장 버튼
+                col_btn1, col_btn2 = st.columns([1, 3])
+                with col_btn1:
+                    if st.button("💾 저장", key=f"save_status_{selected_site_id}", type="primary"):
+                        st.session_state['site_review_status'][selected_site_id] = {
+                            'reviewed': reviewed,
+                            'inspected': inspected,
+                            'reviewer': reviewer if reviewed else '',
+                            'inspector': inspector if inspected else '',
+                            'review_date': str(review_date) if reviewed else '',
+                            'inspection_date': str(inspection_date) if inspected else '',
+                            'notes': notes
+                        }
+                        st.success("✅ 저장되었습니다!")
+                        st.rerun()
+                
+                # 저장된 정보 표시
+                if current_status['reviewed'] or current_status['inspected']:
+                    st.markdown("---")
+                    st.markdown("**📝 저장된 정보**")
+                    
+                    info_cols = st.columns(2)
+                    with info_cols[0]:
+                        if current_status['reviewed']:
+                            st.info(f"✅ **검토 완료**\n- 검토자: {current_status.get('reviewer', 'N/A')}\n- 일자: {current_status.get('review_date', 'N/A')}")
+                    
+                    with info_cols[1]:
+                        if current_status['inspected']:
+                            st.info(f"✅ **점검 완료**\n- 점검자: {current_status.get('inspector', 'N/A')}\n- 일자: {current_status.get('inspection_date', 'N/A')}")
+                    
+                    if current_status.get('notes'):
+                        st.warning(f"📝 **메모**: {current_status['notes']}")
+                
+                # 과대청구 상세 분석
+                st.markdown("---")
+                st.markdown("#### 📊 과대청구 상세 분석")
+                
+                col_a1, col_a2, col_a3 = st.columns(3)
+                
+                with col_a1:
+                    st.metric(
+                        "과대청구 금액",
+                        f"₩{abs(site_detail['overcharge_amount']):,.0f}",
+                        help="실제 청구 요금 - 실사용 기반 추정 요금"
+                    )
+                
+                with col_a2:
+                    st.metric(
+                        "과대청구율",
+                        f"{site_detail['billing_error_pct']:.2f}%",
+                        help="(청구서 - 실사용) / 실사용 × 100"
+                    )
+                
+                with col_a3:
+                    # 평균 대비 차이
+                    avg_error = overcharged_list['billing_error_pct'].mean()
+                    diff_from_avg = site_detail['billing_error_pct'] - avg_error
+                    st.metric(
+                        "평균 대비",
+                        f"{diff_from_avg:+.2f}%p",
+                        help=f"전체 평균 과대청구율: {avg_error:.2f}%"
+                    )
+                
+                # 월별 추이 (해당 국소의 최근 6개월 데이터)
+                st.markdown("---")
+                st.markdown("#### 📈 최근 6개월 추이")
+                
+                # 해당 국소의 최근 6개월 데이터 가져오기
+                site_history = bills_df[bills_df['site_id'] == selected_site_id].sort_values('yymm', ascending=False).head(6)
+                site_history = site_history.sort_values('yymm')  # 오름차순으로 다시 정렬
+                
+                if len(site_history) > 0:
+                    # actual 데이터도 가져오기
+                    site_history_actual = actual_df[actual_df['site_id'] == selected_site_id]
+                    site_history = site_history.merge(
+                        site_history_actual[['yymm', 'site_id', 'kwh_actual']],
+                        on=['yymm', 'site_id'],
+                        how='left'
+                    )
+                    
+                    # 추정 요금 계산
+                    site_history['estimated_cost'] = site_history['kwh_actual'] * avg_unit_cost
+                    site_history['overcharge_amount'] = site_history['cost_bill'] - site_history['estimated_cost']
+                    
+                    # x축 레이블 생성 (안전하게 처리)
+                    def format_yymm(yymm):
+                        yymm_str = str(int(yymm))  # 정수로 변환 후 문자열로
+                        if len(yymm_str) == 6:
+                            return f"{yymm_str[:4]}.{yymm_str[4:6]}"
+                        return yymm_str
+                    
+                    site_history['month_label'] = site_history['yymm'].apply(format_yymm)
+                    
+                    # 차트 생성
+                    fig_trend = go.Figure()
+                    
+                    # 청구서 전력량
+                    fig_trend.add_trace(go.Scatter(
+                        x=site_history['month_label'],
+                        y=site_history['kwh_bill'],
+                        name='청구서 전력량',
+                        mode='lines+markers',
+                        line=dict(color=PYLON_BLUE, width=2),
+                        marker=dict(size=8)
+                    ))
+                    
+                    # 실사용 전력량
+                    fig_trend.add_trace(go.Scatter(
+                        x=site_history['month_label'],
+                        y=site_history['kwh_actual'],
+                        name='실사용 전력량',
+                        mode='lines+markers',
+                        line=dict(color=PYLON_ORANGE, width=2),
+                        marker=dict(size=8)
+                    ))
+                    
+                    fig_trend.update_layout(
+                        title=f'{selected_site_id} 전력량 추이',
+                        xaxis_title='월',
+                        yaxis_title='전력량 (kWh)',
+                        height=400,
+                        hovermode='x unified',
+                        xaxis=dict(type='category')  # 카테고리 타입으로 명시
+                    )
+                    
+                    st.plotly_chart(fig_trend, use_container_width=True)
+                    
+                    # 요금 추이
+                    fig_cost = go.Figure()
+                    
+                    fig_cost.add_trace(go.Bar(
+                        x=site_history['month_label'],
+                        y=site_history['cost_bill'],
+                        name='청구 요금',
+                        marker_color=PYLON_BLUE
+                    ))
+                    
+                    fig_cost.add_trace(go.Bar(
+                        x=site_history['month_label'],
+                        y=site_history['estimated_cost'],
+                        name='추정 요금',
+                        marker_color=PYLON_ORANGE
+                    ))
+                    
+                    fig_cost.update_layout(
+                        title=f'{selected_site_id} 요금 추이',
+                        xaxis_title='월',
+                        yaxis_title='요금 (원)',
+                        barmode='group',
+                        height=400,
+                        hovermode='x unified',
+                        xaxis=dict(type='category')  # 카테고리 타입으로 명시
+                    )
+                    
+                    st.plotly_chart(fig_cost, use_container_width=True)
+                    
+                    # 데이터 테이블
+                    with st.expander("📊 상세 데이터 보기"):
+                        history_display = site_history[['yymm', 'kwh_bill', 'kwh_actual', 'cost_bill', 'estimated_cost', 'overcharge_amount']].copy()
+                        history_display['yymm'] = history_display['yymm'].apply(format_yymm)
+                        history_display.columns = ['월', '청구서(kWh)', '실사용(kWh)', '청구요금(원)', '추정요금(원)', '과대청구금액(원)']
+                        st.dataframe(history_display, use_container_width=True, hide_index=True)
+                else:
+                    st.info("최근 6개월 데이터가 없습니다.")
+            
+            st.markdown("---")
+        else:
+            st.success("✅ 과대청구 국소가 없습니다.")
 
 # Footer with PYLON branding
 st.markdown(create_footer(), unsafe_allow_html=True)

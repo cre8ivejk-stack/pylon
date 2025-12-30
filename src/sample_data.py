@@ -42,6 +42,30 @@ def generate_sample_data(data_dir: Path) -> None:
     
     n_sites = 500  # Increased from 300
     
+    # 지역별 좌표 범위 및 샘플 주소
+    region_coords = {
+        "수도권": {
+            "lat_range": (37.40, 37.70),
+            "lon_range": (126.80, 127.20),
+            "cities": ["서울시 강남구", "서울시 서초구", "서울시 송파구", "경기도 성남시", "경기도 수원시", "경기도 용인시"]
+        },
+        "중부": {
+            "lat_range": (36.20, 36.50),
+            "lon_range": (127.30, 127.50),
+            "cities": ["대전시 유성구", "대전시 서구", "충청남도 천안시", "충청북도 청주시", "세종시"]
+        },
+        "동부": {
+            "lat_range": (35.10, 35.20),
+            "lon_range": (129.00, 129.10),
+            "cities": ["부산시 해운대구", "부산시 수영구", "울산시 남구", "경상남도 창원시", "경상북도 포항시"]
+        },
+        "서부": {
+            "lat_range": (35.10, 35.20),
+            "lon_range": (126.80, 127.00),
+            "cities": ["광주시 북구", "광주시 서구", "전라남도 목포시", "전라북도 전주시", "전라남도 순천시"]
+        }
+    }
+    
     # Generate site_master with scenario tags
     sites = []
     for i in range(n_sites):
@@ -49,6 +73,16 @@ def generate_sample_data(data_dir: Path) -> None:
         site_type = np.random.choice(site_types, p=[0.50, 0.18, 0.05, 0.12, 0.10, 0.05])
         network_gen = np.random.choice(network_gens, p=[0.05, 0.35, 0.60])  # 5% 3G, 35% LTE, 60% 5G
         is_rapa = np.random.choice([True, False], p=[0.30, 0.70])
+        region = np.random.choice(regions)
+        
+        # 지역별 좌표 및 주소 생성
+        region_info = region_coords[region]
+        lat = np.random.uniform(*region_info["lat_range"])
+        lon = np.random.uniform(*region_info["lon_range"])
+        city = np.random.choice(region_info["cities"])
+        street_num = np.random.randint(1, 999)
+        building_num = np.random.randint(1, 99)
+        address = f"{city} {street_num}길 {building_num}"
         
         # Scenario assignment (for diverse test cases)
         scenario = "normal"
@@ -64,7 +98,7 @@ def generate_sample_data(data_dir: Path) -> None:
         sites.append({
             'site_id': site_id,
             'site_name': f"{site_type}_{i:04d}",
-            'region': np.random.choice(regions),
+            'region': region,
             'site_type': site_type,
             'voltage': np.random.choice(voltages, p=[0.7, 0.3]),
             'contract_type': np.random.choice(contract_types, p=[0.4, 0.6]),
@@ -73,7 +107,10 @@ def generate_sample_data(data_dir: Path) -> None:
             'generation': network_gen,  # For filter compatibility
             'is_rapa': is_rapa,
             'rapa_type': 'RAPA' if is_rapa else '일반',  # For filter compatibility
-            'scenario': scenario  # Internal tag for data generation
+            'scenario': scenario,  # Internal tag for data generation
+            'address': address,  # 주소
+            'latitude': round(lat, 6),  # 위도
+            'longitude': round(lon, 6)  # 경도
         })
     
     site_master = pd.DataFrame(sites)

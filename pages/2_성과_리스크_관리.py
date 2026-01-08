@@ -299,7 +299,7 @@ with tab1:
 with tab2:
     st.markdown("## ⚠️ 전기요금 Risk Monitoring")
     
-    # Merge bills with actual
+    # Merge bills with actual (bills already has region, contract_type)
     merged = filtered_bills.merge(
         actual_df,
         on=['yymm', 'site_id'],
@@ -395,16 +395,24 @@ with tab2:
         high_risk_sites = merged[merged['risk_score_display'] > 70].copy()
         
         if len(high_risk_sites) > 0:
-            high_risk_display = high_risk_sites[[
-                'site_id', 'region', 'contract_type', 'cost_bill', 'impact', 'likelihood', 'confidence', 
-                'risk_score_raw', 'risk_score_display'
-            ]].sort_values('risk_score_raw', ascending=False).head(20)
+            # Select columns that exist
+            display_columns = ['site_id', 'cost_bill', 'impact', 'likelihood', 'confidence', 
+                             'risk_score_raw', 'risk_score_display']
+            korean_columns = ['국소ID', '청구금액(원)', '영향도(원)', 
+                            '발생가능성', '신뢰도', '리스크점수(원기반)', '리스크점수(0~100)']
+            
+            # Add optional columns if they exist
+            if 'region' in high_risk_sites.columns:
+                display_columns.insert(1, 'region')
+                korean_columns.insert(1, '지역')
+            if 'contract_type' in high_risk_sites.columns:
+                display_columns.insert(2 if 'region' in display_columns else 1, 'contract_type')
+                korean_columns.insert(2 if '지역' in korean_columns else 1, '계약유형')
+            
+            high_risk_display = high_risk_sites[display_columns].sort_values('risk_score_raw', ascending=False).head(20)
             
             # Rename columns to Korean
-            high_risk_display.columns = [
-                '국소ID', '지역', '계약유형', '청구금액(원)', '영향도(원)', 
-                '발생가능성', '신뢰도', '리스크점수(원기반)', '리스크점수(0~100)'
-            ]
+            high_risk_display.columns = korean_columns
             
             # Widget card for action creation
             render_widget_card(
@@ -426,17 +434,26 @@ with tab2:
         # Risk heatmap by region and contract type
         st.markdown("### 리스크 히트맵 (지역 x 계약유형)")
         
-        risk_pivot = merged.groupby(['region', 'contract_type'])['risk_score_display'].mean().reset_index()
-        risk_pivot_table = risk_pivot.pivot(index='region', columns='contract_type', values='risk_score_display')
-        
-        fig_heatmap = px.imshow(
-            risk_pivot_table,
-            title='평균 리스크 점수 (지역 x 계약유형)',
-            labels=dict(x="계약유형", y="지역", color="리스크 점수"),
-            color_continuous_scale='RdYlGn_r'
-        )
-        
-        st.plotly_chart(fig_heatmap, use_container_width=True)
+        # Check if required columns exist
+        if 'region' in merged.columns and 'contract_type' in merged.columns:
+            risk_pivot = merged.groupby(['region', 'contract_type'])['risk_score_display'].mean().reset_index()
+            risk_pivot_table = risk_pivot.pivot(index='region', columns='contract_type', values='risk_score_display')
+            
+            fig_heatmap = px.imshow(
+                risk_pivot_table,
+                title='평균 리스크 점수 (지역 x 계약유형)',
+                labels=dict(x="계약유형", y="지역", color="리스크 점수"),
+                color_continuous_scale='RdYlGn_r'
+            )
+            
+            st.plotly_chart(fig_heatmap, use_container_width=True)
+        else:
+            # Debug info
+            st.warning("⚠️ 데이터 스키마 업데이트 필요: 사이드바 상단의 '⋮' 메뉴 > 'Clear cache' 를 클릭해주세요.")
+            with st.expander("🔍 디버그 정보"):
+                st.write("merged DataFrame 컬럼:", list(merged.columns))
+                st.write("필요한 컬럼: region, contract_type")
+                st.info("캐시를 클리어한 후 페이지를 새로고침하면 최신 데이터 스키마가 적용됩니다.")
 
 # Footer with PYLON branding
 st.markdown(create_footer(), unsafe_allow_html=True)

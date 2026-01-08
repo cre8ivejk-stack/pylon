@@ -298,7 +298,7 @@ with tab3:
                     (filtered_bills['kwh_bill'] == 0)
                 ].sort_values('yymm', ascending=False).head(6)
                 
-                zero_months_list = ','.join(site_bills['yymm'].tolist())
+                zero_months_list = ','.join(site_bills['yymm'].astype(str).tolist())
                 
                 zero_details.append({
                     'site_id': site_id,

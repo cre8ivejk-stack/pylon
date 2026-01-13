@@ -1,4 +1,4 @@
-name: pylon-energy-management
+name: pylon-test4
 entrypoint: streamlit run app.py --server.port $PORT
 description: |
   PYLON - AI 기반 에너지 인텔리전스 시스템
@@ -7,7 +7,7 @@ service_type: python-streamlit
 properties:
 - revision: master
   ingress:
-    path: /pylon
+    path: /pylon-test4
   image:
     # Python 3.11 이미지 사용 (로컬 환경과 일치)
     from: 'public.ecr.aws/docker/library/python:3.11-slim'

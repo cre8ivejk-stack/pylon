@@ -1,5 +1,5 @@
 name: pylon-test4
-entrypoint: streamlit run app.py --server.port $PORT --server.baseUrlPath /pylon-test4
+entrypoint: streamlit run app.py --server.port $PORT --server.baseUrlPath pylon-test4
 description: |
   PYLON - AI 기반 에너지 인텔리전스 시스템
   데이터센터 에너지 최적화 및 성과 관리 플랫폼

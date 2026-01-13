@@ -1,0 +1,6 @@
+[server]
+headless = true
+baseUrlPath = "pylon-test4"
+
+[browser]
+gatherUsageStats = false

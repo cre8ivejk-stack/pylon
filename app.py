@@ -43,12 +43,20 @@ def load_governance_data():
     """Load governance config with caching"""
     return load_governance_config()
 
-# Load data (cached)
-dal, bills_df = load_app_data()
-action_manager = ActionManager(data_dir)
-gov_config = load_governance_data()
-latest_yymm = bills_df['yymm'].max() if len(bills_df) > 0 else None
-governance_badge = GovernanceBadge.create_from_config_and_data(gov_config, latest_yymm)
+# Load data (cached) - with error handling for deployment
+try:
+    dal, bills_df = load_app_data()
+    action_manager = ActionManager(data_dir)
+    gov_config = load_governance_data()
+    latest_yymm = bills_df['yymm'].max() if len(bills_df) > 0 else None
+    governance_badge = GovernanceBadge.create_from_config_and_data(gov_config, latest_yymm)
+    data_loaded = True
+except Exception as e:
+    st.error(f"데이터 로드 중 오류 발생: {str(e)}")
+    st.info("앱은 계속 실행 중이지만 일부 기능이 제한될 수 있습니다.")
+    dal, bills_df, action_manager, gov_config, governance_badge = None, None, None, None, None
+    latest_yymm = None
+    data_loaded = False
 
 # Apply PYLON brand colors with enhanced styling
 st.markdown(apply_page_style(), unsafe_allow_html=True)
@@ -118,7 +126,10 @@ st.markdown('<div class="subtitle">SKT Network센터 에너지 관리 운영 플
 st.divider()
 
 # Governance badges
-render_governance_badges(governance_badge)
+if data_loaded and governance_badge:
+    render_governance_badges(governance_badge)
+else:
+    st.warning("거버넌스 배지를 로드할 수 없습니다.")
 
 # 전략 섹션 추가
 render_strategy_overview()
@@ -154,39 +165,45 @@ with col1:
 with col2:
     st.markdown("## 📊 시스템 상태")
     
-    # Quick stats
-    site_master = dal.load_site_master()
-    
-    if len(bills_df) > 0:
-        latest_month = bills_df['yymm'].max()
-        total_sites = len(site_master)
-        total_cost = bills_df[bills_df['yymm'] == latest_month]['cost_bill'].sum()
+    if data_loaded and dal and bills_df is not None:
+        # Quick stats
+        site_master = dal.load_site_master()
         
-        st.metric("최신 데이터", latest_month)
-        st.metric("관리 국소", f"{total_sites:,} 개소")
-        st.metric("당월 전기요금", f"₩{total_cost:,.0f}")
+        if len(bills_df) > 0:
+            latest_month = bills_df['yymm'].max()
+            total_sites = len(site_master)
+            total_cost = bills_df[bills_df['yymm'] == latest_month]['cost_bill'].sum()
+            
+            st.metric("최신 데이터", latest_month)
+            st.metric("관리 국소", f"{total_sites:,} 개소")
+            st.metric("당월 전기요금", f"₩{total_cost:,.0f}")
+        else:
+            st.info("데이터가 비어 있습니다.")
     else:
         st.warning("데이터를 로드할 수 없습니다.")
     
     st.markdown("---")
     
     # Action stats
-    current_user = st.session_state.get("current_user", "담당자")
-    action_stats = action_manager.get_action_stats(current_user)
-    
-    st.markdown("### ⚡ 작업 현황")
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.metric("해야 할 일", action_stats['todo'])
-        st.metric("진행 중", action_stats['doing'])
-    with col_b:
-        st.metric("완료", action_stats['done'])
-        if action_stats['overdue'] > 0:
-            # Risk indicator: use PYLON_ORANGE for overdue items
-            st.markdown(f'<div style="color: {PYLON_ORANGE}; font-weight: bold;">⚠️ 지연: {action_stats["overdue"]}</div>', unsafe_allow_html=True)
-        else:
-            st.metric("✅ 지연", 0)
+    if data_loaded and action_manager:
+        current_user = st.session_state.get("current_user", "담당자")
+        action_stats = action_manager.get_action_stats(current_user)
+        
+        st.markdown("### ⚡ 작업 현황")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.metric("해야 할 일", action_stats['todo'])
+            st.metric("진행 중", action_stats['doing'])
+        with col_b:
+            st.metric("완료", action_stats['done'])
+            if action_stats['overdue'] > 0:
+                # Risk indicator: use PYLON_ORANGE for overdue items
+                st.markdown(f'<div style="color: {PYLON_ORANGE}; font-weight: bold;">⚠️ 지연: {action_stats["overdue"]}</div>', unsafe_allow_html=True)
+            else:
+                st.metric("✅ 지연", 0)
+    else:
+        st.info("작업 현황을 로드할 수 없습니다.")
 
 st.divider()
 
@@ -203,7 +220,10 @@ st.markdown("""
 
 각 항목은 **대기/진행/완료/보류** 상태로 관리됩니다.
 """)
-render_action_inbox(action_manager, st.session_state.get("current_user", "담당자"))
+if data_loaded and action_manager:
+    render_action_inbox(action_manager, st.session_state.get("current_user", "담당자"))
+else:
+    st.info("작업함을 로드할 수 없습니다.")
 
 st.divider()
 

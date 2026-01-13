@@ -9,8 +9,8 @@ properties:
   ingress:
     path: /pylon-test4
   image:
-    # Python 3.11 이미지 사용 (로컬 환경과 일치)
-    from: 'public.ecr.aws/docker/library/python:3.11-slim'
+    # Python 3.9 이미지 사용 (안정성 우선)
+    from: 'public.ecr.aws/docker/library/python:3.9-slim'
   # cronjob 필요 시 아래 부분 주석 해제
   #cronjobs:
   #- name: daily-data-update

@@ -1,12 +1,9 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
 build/
 develop-eggs/
 dist/
@@ -15,8 +12,6 @@ eggs/
 .eggs/
 lib/
 lib64/
-Lib/
-Scripts/
 parts/
 sdist/
 var/
@@ -24,21 +19,18 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+Lib/
+Scripts/
 pyvenv.cfg
 share/
-etc/
 
 # Streamlit
 .streamlit/secrets.toml
-# Keep config.toml for deployment
-
-# Data files (generated at runtime)
-# Note: Sample data files are included for demo purposes
-# data/*.parquet
-# data/*.csv
-data/actions.json
-data/experiments.json
-data/verified_savings.json
 
 # IDE
 .vscode/
@@ -47,16 +39,29 @@ data/verified_savings.json
 *.swo
 *~
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
+# Logs
+*.log
 
+# Environment
+.env
+.env.local
 
+# Temporary files
+*.tmp
+*.bak
+*.cache
 
+# Documentation artifacts
+*.zip
+*.pptx
+*.html
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/

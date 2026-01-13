@@ -1,0 +1,19 @@
+name: pylon-energy-management
+entrypoint: streamlit run app.py --server.port $PORT
+description: |
+  PYLON - AI 기반 에너지 인텔리전스 시스템
+  데이터센터 에너지 최적화 및 성과 관리 플랫폼
+service_type: python-streamlit
+properties:
+- revision: master
+  ingress:
+    path: /pylon
+  image:
+    # Python 3.11 이미지 사용 (로컬 환경과 일치)
+    from: 'public.ecr.aws/docker/library/python:3.11-slim'
+  # cronjob 필요 시 아래 부분 주석 해제
+  #cronjobs:
+  #- name: daily-data-update
+  #  schedule: '0 0 * * *'  # 매일 자정
+  #  data: ''
+  #  uri: '/pylon/regenerate_data'

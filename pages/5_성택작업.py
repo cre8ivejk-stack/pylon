@@ -36,3 +36,4 @@ with col2:
     st.subheader("오른쪽 영역")
     st.write("내용을 추가하세요.")
 
+

@@ -17,3 +17,5 @@ properties:
   #  schedule: '0 0 * * *'  # 매일 자정
   #  data: ''
   #  uri: '/pylon/regenerate_data'
+
+

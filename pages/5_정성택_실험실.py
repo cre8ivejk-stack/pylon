@@ -36,7 +36,7 @@ st.markdown(
 st.divider()
 
 # HTML 파일 경로
-html_rel_path = Path("etc/jupyter/nbconfig/notebook.d/한전_전기요금_시뮬레이터_250401시행_오프라인용_v1_0.html")
+html_rel_path = Path("etc/한전_전기요금_시뮬레이터_250401시행_오프라인용_v1_0.html")
 html_path = (parent_dir / html_rel_path).resolve()
 
 if not html_path.exists():

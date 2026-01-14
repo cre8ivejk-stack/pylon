@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -55,6 +55,16 @@ desktop.ini
 *.tmp
 *.bak
 *.cache
+
+# Data (대용량 파일 제외 - 필요시 Git LFS 사용)
+# *.parquet  # 주석 처리: 샘플 데이터는 포함
+# *.csv
+
+# Jupyter Notebooks (개발용 - 가이드 문서는 포함)
+notebooks/*.ipynb
+notebooks/**/*.ipynb
+.ipynb_checkpoints/
+# notebooks 폴더의 .md와 .py는 커밋됨 (가이드용)
 
 # Documentation artifacts
 *.zip

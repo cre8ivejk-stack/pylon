@@ -1,5 +1,5 @@
 # PYLON - SKT Network센터 Energy Operations Platform
-# Python 3.9+ required
+# Python 3.9+ required (Streamlit Cloud uses Python 3.11 by default)
 
 # Core framework
 streamlit==1.30.0
@@ -8,9 +8,9 @@ streamlit==1.30.0
 openai==1.61.1
 
 # Data processing
-pandas==2.0.3
-numpy==1.24.3
-pyarrow==14.0.1
+pandas>=2.0.3,<3.0.0
+numpy>=1.24.3,<2.0.0
+pyarrow>=14.0.1,<16.0.0
 
 # Visualization
 plotly==5.18.0
@@ -20,10 +20,6 @@ altair==5.2.0
 python-dateutil==2.8.2
 PyYAML==6.0.1
 
-# Development & Analysis (Jupyter)
-jupyter==1.0.0
-jupyterlab==4.0.9
-notebook==7.0.6
-ipykernel==6.27.1
-ipywidgets==8.1.1
+# Development & Analysis (Jupyter) - REMOVED for Streamlit Cloud deployment
+# Jupyter packages are not needed for Streamlit web app deployment
 

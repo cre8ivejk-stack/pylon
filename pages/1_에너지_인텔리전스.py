@@ -31,6 +31,7 @@ from src.config_loader import load_governance_config
 from components.global_controls import render_sidebar_filters, render_governance_badges, apply_filters, render_filter_summary
 from components.widget_card import render_widget_card, render_simple_metric_card
 from components.action_inbox import render_compact_action_inbox
+# PROBE is now available as a dedicated page (pages/0_PYLON_PROBE.py)
 from styles import (
     PYLON_BLUE, PYLON_ORANGE, apply_page_style, create_footer
 )
@@ -85,9 +86,36 @@ latest_yymm = bills_df['yymm'].max() if len(bills_df) > 0 else None
 governance_badge = GovernanceBadge.create_from_config_and_data(gov_config, latest_yymm)
 render_governance_badges(governance_badge)
 
-# Global filters (sidebar)
+# Apply probe_nav filters if present (before rendering filters)
+from src.copilot.navigation import apply_probe_nav_to_filters
+if "probe_nav" in st.session_state:
+    probe_nav = st.session_state["probe_nav"]
+    nav_filters = probe_nav.get("filters", {})
+    if nav_filters:
+        # Initialize filter state if needed
+        if "filters" not in st.session_state:
+            st.session_state.filters = {}
+        # Apply copilot filters to session_state
+        if "yymm_list" in nav_filters:
+            st.session_state.filters["yymm_list"] = nav_filters["yymm_list"]
+        if "regions" in nav_filters:
+            st.session_state.filters["regions"] = nav_filters["regions"]
+        if "site_types" in nav_filters:
+            st.session_state.filters["site_types"] = nav_filters["site_types"]
+        if "contract_type_major" in nav_filters:
+            st.session_state.filters["contract_type_major"] = nav_filters["contract_type_major"]
+        if "contract_target" in nav_filters:
+            st.session_state.filters["contract_target"] = nav_filters["contract_target"]
+        if "rapa" in nav_filters:
+            st.session_state.filters["rapa"] = nav_filters["rapa"]
+        if "network_gen" in nav_filters:
+            st.session_state.filters["network_gen"] = nav_filters["network_gen"]
+    # Clear probe_nav after use (once-only)
+    del st.session_state["probe_nav"]
+
+# Global filters (sidebar) - with query params sync
 available_yymm = sorted(bills_df['yymm'].unique().tolist())
-filters = render_sidebar_filters(available_yymm)
+filters = render_sidebar_filters(available_yymm, sync_with_query_params=True)
 
 # Filter summary
 render_filter_summary(filters)
@@ -482,21 +510,42 @@ with tab3:
     # 사용 가능한 모든 월 가져오기
     all_available_months = sorted(bills_df['yymm'].unique().tolist(), reverse=True)
     
+    # Read selected month from query params if available
+    query_params = st.query_params.to_dict() if hasattr(st, "query_params") else {}
+    query_month = query_params.get("month")
+    
+    # Determine default month
+    if query_month:
+        try:
+            default_month = int(query_month)
+            if default_month not in all_available_months:
+                default_month = all_available_months[0] if all_available_months else None
+        except (ValueError, TypeError):
+            default_month = all_available_months[0] if all_available_months else None
+    else:
+        default_month = all_available_months[0] if all_available_months else None
+    
+    # Find index for default month
+    default_index = 0
+    if default_month and default_month in all_available_months:
+        default_index = all_available_months.index(default_month)
+    
     # 월 선택 UI
     col_month1, col_month2 = st.columns([3, 1])
     
     with col_month1:
-        # 기본값: 최신 월
-        default_month = all_available_months[0] if all_available_months else None
-        
         # 월 선택 selectbox
         selected_month = st.selectbox(
             "분석 대상 월",
             options=all_available_months,
-            index=0,
+            index=default_index,
             format_func=lambda x: f"{str(x)[:4]}년 {str(x)[4:6]}월",
             key="bill_actual_month_selector"
         )
+        
+        # Update query params when month changes
+        if hasattr(st, "query_params") and selected_month != query_month:
+            st.query_params["month"] = str(selected_month)
     
     with col_month2:
         st.metric("선택된 월", f"{str(selected_month)[:4]}.{str(selected_month)[4:6]}")

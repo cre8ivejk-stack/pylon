@@ -1,6 +1,7 @@
 [server]
 headless = true
-baseUrlPath = "pylon-test4"
+# SKT Playground 배포 시 아래 주석을 해제하세요:
+# baseUrlPath = "pylon-test4"
 
 [browser]
 gatherUsageStats = false

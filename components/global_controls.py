@@ -3,6 +3,11 @@
 import streamlit as st
 from typing import Dict, List, Optional, Any
 from src.models import GovernanceBadge
+from src.copilot.deeplink import (
+    parse_filters_from_query_params,
+    update_query_params_from_filters,
+    sync_filters_with_query_params,
+)
 import pandas as pd
 
 
@@ -68,18 +73,29 @@ def _convert_period_to_yymm(period_unit: str, year: Optional[int], quarters: Lis
 
 
 def render_sidebar_filters(
-    available_yymm: List[str]
+    available_yymm: List[str],
+    sync_with_query_params: bool = True
 ) -> Dict[str, Any]:
     """
     Render filter controls in sidebar.
     
     Args:
         available_yymm: Available months from data
+        sync_with_query_params: If True, sync filters with query params (default: True)
     
     Returns:
         Dictionary with filter selections including yymm_list
     """
     _initialize_filter_state()
+    
+    # Sync with query params if enabled
+    if sync_with_query_params:
+        default_filters = st.session_state.filters.copy()
+        synced_filters = sync_filters_with_query_params(default_filters)
+        # Update session state with synced values for use in UI defaults
+        for key, value in synced_filters.items():
+            if key in st.session_state.filters:
+                st.session_state.filters[key] = value
     
     with st.sidebar:
         st.markdown("## 🎯 조회 범위")
@@ -106,13 +122,31 @@ def render_sidebar_filters(
         available_years = sorted(list(set(available_years)))
         default_year = available_years[-1] if available_years else 2026
         
+        # Check if yymm_list is already set from query params
+        yymm_list_from_params = st.session_state.filters.get('yymm_list', [])
         yymm_list = []
         
         if period_unit == '연 단위':
+            # Use yymm_list from params to infer selected years if available
+            if yymm_list_from_params:
+                # Extract years from yymm_list
+                years_from_yymm = set()
+                for ym in yymm_list_from_params:
+                    ym_str = str(ym)
+                    if len(ym_str) >= 4:
+                        years_from_yymm.add(int(ym_str[:4]))
+                    else:
+                        years_from_yymm.add(2000 + int(ym_str[:2]))
+                default_years = [y for y in sorted(years_from_yymm) if y in available_years]
+                if not default_years:
+                    default_years = [default_year]
+            else:
+                default_years = [default_year]
+            
             selected_years = st.multiselect(
                 "연도 선택",
                 options=available_years,
-                default=[default_year],
+                default=default_years,
                 key='filter_years'
             )
             if selected_years:
@@ -165,17 +199,28 @@ def render_sidebar_filters(
             if selected_months:
                 yymm_list = _convert_period_to_yymm(period_unit, selected_year, [], selected_months)
         
-        # Filter yymm_list to only available data (convert available_yymm to int)
-        available_yymm_int = [int(ym) for ym in available_yymm]
-        yymm_list = [ym for ym in yymm_list if ym in available_yymm_int]
+        # If yymm_list is empty but we have it from query params, use that
+        if not yymm_list and yymm_list_from_params:
+            available_yymm_int = [int(ym) for ym in available_yymm]
+            yymm_list = [ym for ym in yymm_list_from_params if ym in available_yymm_int]
+        else:
+            # Filter yymm_list to only available data (convert available_yymm to int)
+            available_yymm_int = [int(ym) for ym in available_yymm]
+            yymm_list = [ym for ym in yymm_list if ym in available_yymm_int]
         
         st.divider()
         
         # === 지역 필터 ===
         st.markdown("### 🌍 지역")
         regions_options = ["수도권", "중부", "동부", "서부"]
-        # Use saved value from session_state if available
-        default_regions = st.session_state.filters.get('regions', regions_options) if 'filter_regions' not in st.session_state else st.session_state.get('filter_regions', regions_options)
+        # Use synced value from session_state (which includes query params)
+        default_regions = st.session_state.filters.get('regions', regions_options)
+        # Ensure default_regions is a list and all values are valid
+        if not isinstance(default_regions, list):
+            default_regions = regions_options
+        default_regions = [r for r in default_regions if r in regions_options]
+        if not default_regions:
+            default_regions = regions_options
         selected_regions = st.multiselect(
             "지역 선택",
             options=regions_options,
@@ -188,7 +233,13 @@ def render_sidebar_filters(
         # === 설비유형 필터 ===
         st.markdown("### 🏢 설비유형")
         site_types_options = ["기지국", "통합국", "사옥", "중계국", "IDC", "기타"]
-        default_site_types = st.session_state.filters.get('site_types', site_types_options) if 'filter_site_types' not in st.session_state else st.session_state.get('filter_site_types', site_types_options)
+        default_site_types = st.session_state.filters.get('site_types', site_types_options)
+        # Ensure default_site_types is a list and all values are valid
+        if not isinstance(default_site_types, list):
+            default_site_types = site_types_options
+        default_site_types = [s for s in default_site_types if s in site_types_options]
+        if not default_site_types:
+            default_site_types = site_types_options
         selected_site_types = st.multiselect(
             "설비유형 선택",
             options=site_types_options,
@@ -200,10 +251,15 @@ def render_sidebar_filters(
         
         # === 계약대상 필터 ===
         st.markdown("### 🔌 계약대상")
+        contract_target_options = ['전체', '한전계약(ME)', '건물계약(MC)']
+        default_contract_target = st.session_state.filters.get('contract_target', '전체')
+        if default_contract_target not in contract_target_options:
+            default_contract_target = '전체'
+        default_index = contract_target_options.index(default_contract_target)
         contract_target = st.radio(
             "계약대상 선택",
-            options=['전체', '한전계약(ME)', '건물계약(MC)'],
-            index=0,
+            options=contract_target_options,
+            index=default_index,
             key='filter_contract_target'
         )
         
@@ -214,7 +270,13 @@ def render_sidebar_filters(
         
         # 대분류
         contract_major_options = ["정액", "종량"]
-        default_contract_major = st.session_state.filters.get('contract_type_major', contract_major_options) if 'filter_contract_major' not in st.session_state else st.session_state.get('filter_contract_major', contract_major_options)
+        default_contract_major = st.session_state.filters.get('contract_type_major', contract_major_options)
+        # Ensure default_contract_major is a list and all values are valid
+        if not isinstance(default_contract_major, list):
+            default_contract_major = contract_major_options
+        default_contract_major = [c for c in default_contract_major if c in contract_major_options]
+        if not default_contract_major:
+            default_contract_major = contract_major_options
         selected_contract_major = st.multiselect(
             "계약유형 (대분류)",
             options=contract_major_options,
@@ -230,7 +292,13 @@ def render_sidebar_filters(
         # === 네트워크 세대 필터 ===
         st.markdown("### 📡 네트워크 세대")
         network_gen_options = ["3G", "LTE", "5G"]
-        default_network_gen = st.session_state.filters.get('network_gen', network_gen_options) if 'filter_network_gen' not in st.session_state else st.session_state.get('filter_network_gen', network_gen_options)
+        default_network_gen = st.session_state.filters.get('network_gen', network_gen_options)
+        # Ensure default_network_gen is a list and all values are valid
+        if not isinstance(default_network_gen, list):
+            default_network_gen = network_gen_options
+        default_network_gen = [n for n in default_network_gen if n in network_gen_options]
+        if not default_network_gen:
+            default_network_gen = network_gen_options
         selected_network_gen = st.multiselect(
             "세대 선택",
             options=network_gen_options,
@@ -242,10 +310,15 @@ def render_sidebar_filters(
         
         # === RAPA 여부 필터 ===
         st.markdown("### ⚡ RAPA 여부")
+        rapa_options = ['전체', 'RAPA', '비RAPA']
+        default_rapa = st.session_state.filters.get('rapa', '전체')
+        if default_rapa not in rapa_options:
+            default_rapa = '전체'
+        default_rapa_index = rapa_options.index(default_rapa)
         rapa_filter = st.radio(
             "RAPA 선택",
-            options=['전체', 'RAPA', '비RAPA'],
-            index=0,
+            options=rapa_options,
+            index=default_rapa_index,
             key='filter_rapa'
         )
         
@@ -265,6 +338,10 @@ def render_sidebar_filters(
     }
     
     st.session_state.filters = filters
+    
+    # Update query params when filters change
+    if sync_with_query_params:
+        update_query_params_from_filters(filters)
     
     return filters
 

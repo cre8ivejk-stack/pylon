@@ -17,6 +17,7 @@ try:
     from components.action_inbox import render_action_inbox
     from components.strategy_overview import render_strategy_overview
     from components.key_initiatives import render_key_initiatives
+    # Copilot panel is deprecated - PROBE is now a dedicated page
     from styles import (
         PYLON_BLUE, PYLON_GREEN, PYLON_ORANGE, PYLON_TEXT, PYLON_BORDER,
         apply_page_style, create_footer
@@ -75,6 +76,9 @@ if not IMPORTS_OK:
 
 # Apply PYLON brand colors with enhanced styling
 st.markdown(apply_page_style(), unsafe_allow_html=True)
+
+# Note: PROBE is now available as a dedicated page (pages/0_PYLON_PROBE.py)
+# Sidebar Copilot has been removed for better UX
 
 # Custom CSS for app-specific styling - ENHANCED FOR VISIBILITY
 st.markdown(f"""
@@ -266,6 +270,11 @@ with col4:
     st.markdown("### ✅ 검증")
     st.markdown("실증 결과를 확정 성과로 반영합니다.")
     st.page_link("pages/4_검증_실증.py", label="→ 검증 & 실증", icon="🔬")
+
+st.markdown("---")
+st.markdown("## 🤖 PROBE")
+st.markdown("자연어로 질문하시면 분석 결과와 함께 상세 페이지로 이동할 수 있습니다.")
+st.page_link("pages/0_PYLON_PROBE.py", label="→ PYLON PROBE", icon="🤖")
 
 st.divider()
 

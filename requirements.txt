@@ -4,6 +4,9 @@
 # Core framework
 streamlit==1.30.0
 
+# LLM (optional)
+openai==1.61.1
+
 # Data processing
 pandas==2.0.3
 numpy==1.24.3

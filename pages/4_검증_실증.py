@@ -26,6 +26,7 @@ from src.config_loader import load_governance_config
 from components.global_controls import render_governance_badges
 from components.widget_card import render_simple_metric_card
 from components.action_inbox import render_compact_action_inbox
+# PROBE is now available as a dedicated page (pages/0_PYLON_PROBE.py)
 from styles import (
     PYLON_BLUE, PYLON_GREEN,
     apply_page_style, create_footer

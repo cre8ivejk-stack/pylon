@@ -417,7 +417,7 @@
                     <!-- 최종 합계 -->
                     <div class="detail-card" style="background-color: #eff6ff; border-color: #bfdbfe;">
                         <div class="flex-between text-xs text-gray-500">
-                            <span>요금계</span>
+                            <span>요금계(공급가액)</span>
                             <span id="detailElectricBill" class="font-bold">0원</span>
                         </div>
                         <div class="flex-between text-xs text-gray-500">
@@ -425,7 +425,7 @@
                             <span id="detailVat">0원</span>
                         </div>
                         <div class="flex-between text-xs text-gray-500 mb-2">
-                            <span>기금(2.7%)</span>
+                            <span>전력기금(2.7%)</span>
                             <span id="detailFund">0원</span>
                         </div>
                         <div class="border-t flex-between pt-2" style="border-top-color: #93c5fd;">
@@ -769,7 +769,7 @@
                 const detailSection = document.getElementById('detailSection');
                 detailSection.classList.add('active');
 
-                document.getElementById('detailPlanName').textContent = `[${index + 1}위] ${data.name} 상세`;
+                document.getElementById('detailPlanName').textContent = `${data.name} 상세 내역`;
                 
                 document.getElementById('detailBaseFormula').textContent = data.detail.base;
                 document.getElementById('detailBaseTotal').textContent = formatCurrency(data.baseCost);

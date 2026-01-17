@@ -1,0 +1,123 @@
+{
+    "config": {
+      "DEFAULT_CONTRACT_POWER": 4,
+      "VAT_RATE": 0.1,
+      "FUND_RATE": 0.027,
+      "SUPER_USER_RATE_THRESHOLD": 400
+    },
+    "plans": [
+      {
+        "id": "res_low", "name": "주택용 (저압)", "type": "residential", "voltage": "low",
+        "desc": "누진세+슈퍼유저",
+        "tiers": {
+          "summer": [ 
+            { "limit": 300, "base": 910, "rate": 120.0 },
+            { "limit": 450, "base": 1600, "rate": 214.6 },
+            { "limit": 1000, "base": 7300, "rate": 307.3 }, 
+            { "limit": null, "base": 7300, "rate": 736.2 }
+          ],
+          "winter": [
+            { "limit": 200, "base": 910, "rate": 120.0 },
+            { "limit": 400, "base": 1600, "rate": 214.6 },
+            { "limit": 1000, "base": 7300, "rate": 307.3 },
+            { "limit": null, "base": 7300, "rate": 736.2 } 
+          ],
+          "other": [
+            { "limit": 200, "base": 910, "rate": 120.0 },
+            { "limit": 400, "base": 1600, "rate": 214.6 },
+            { "limit": null, "base": 7300, "rate": 307.3 }
+          ]
+        }
+      },
+      {
+        "id": "gen_gap_low", "name": "일반용(갑)Ⅰ 저압", "type": "general_seasonal",
+        "desc": "계절별 단일단가",
+        "basePrice": 6160,
+        "seasons": { "summer": 132.4, "springFall": 91.9, "winter": 119.0 }
+      },
+      {
+        "id": "res_high", "name": "주택용 (고압)", "type": "residential", "voltage": "high",
+        "desc": "누진세+슈퍼유저",
+        "tiers": {
+          "summer": [
+            { "limit": 300, "base": 730, "rate": 105.0 },
+            { "limit": 450, "base": 1260, "rate": 174.0 },
+            { "limit": 1000, "base": 6060, "rate": 242.3 },
+            { "limit": null, "base": 6060, "rate": 601.3 } 
+          ],
+          "winter": [
+            { "limit": 200, "base": 730, "rate": 105.0 },
+            { "limit": 400, "base": 1260, "rate": 174.0 },
+            { "limit": 1000, "base": 6060, "rate": 242.3 },
+            { "limit": null, "base": 6060, "rate": 601.3 } 
+          ],
+          "other": [
+            { "limit": 200, "base": 730, "rate": 105.0 },
+            { "limit": 400, "base": 1260, "rate": 174.0 },
+            { "limit": null, "base": 6060, "rate": 242.3 }
+          ]
+        }
+      },
+      {
+        "id": "gen_gap_ha_1", "name": "일반용(갑)Ⅱ 고압A Ⅰ", "type": "general_tou",
+        "desc": "시간대별 차등",
+        "basePrice": 7170,
+        "seasons": {
+          "summer": { "light": 89.4, "mid": 140.6, "peak": 163.1 },
+          "springFall": { "light": 89.4, "mid": 96.8, "peak": 108.1 },
+          "winter": { "light": 98.1, "mid": 128.5, "peak": 143.3 }
+        }
+      },
+      {
+        "id": "gen_gap_ha_2", "name": "일반용(갑)Ⅱ 고압A Ⅱ", "type": "general_tou",
+        "desc": "표준형",
+        "basePrice": 8230,
+        "seasons": {
+          "summer": { "light": 84.1, "mid": 135.3, "peak": 157.8 },
+          "springFall": { "light": 84.1, "mid": 91.5, "peak": 102.8 },
+          "winter": { "light": 92.8, "mid": 123.2, "peak": 138.0 }
+        }
+      },
+      {
+        "id": "gen_eul_ha_1", "name": "일반용(을) 고압A Ⅰ", "type": "general_tou",
+        "desc": "낮은 기본료",
+        "basePrice": 7220,
+        "seasons": {
+          "summer": { "light": 92.8, "mid": 145.7, "peak": 227.8 },
+          "springFall": { "light": 92.8, "mid": 115.3, "peak": 146.0 },
+          "winter": { "light": 99.8, "mid": 145.9, "peak": 203.4 }
+        }
+      },
+      {
+        "id": "gen_eul_ha_2", "name": "일반용(을) 고압A Ⅱ", "type": "general_tou",
+        "desc": "표준형",
+        "basePrice": 8320,
+        "seasons": {
+          "summer": { "light": 87.3, "mid": 140.2, "peak": 222.3 },
+          "springFall": { "light": 87.3, "mid": 109.8, "peak": 140.5 },
+          "winter": { "light": 94.3, "mid": 140.4, "peak": 197.9 }
+        }
+      },
+      {
+        "id": "gen_eul_ha_3", "name": "일반용(을) 고압A Ⅲ", "type": "general_tou",
+        "desc": "높은 기본료",
+        "basePrice": 9810,
+        "seasons": {
+          "summer": { "light": 86.4, "mid": 139.6, "peak": 209.9 },
+          "springFall": { "light": 86.4, "mid": 108.5, "peak": 132.2 },
+          "winter": { "light": 93.7, "mid": 139.8, "peak": 186.7 }
+        }
+      },
+      {
+        "id": "gen_eul_hb_2", "name": "일반용(을) 고압B Ⅱ", "type": "general_tou",
+        "desc": "초대형 건물",
+        "basePrice": 8190,
+        "seasons": {
+          "summer": { "light": 90.4, "mid": 142.7, "peak": 224.0 },
+          "springFall": { "light": 90.4, "mid": 112.8, "peak": 143.1 },
+          "winter": { "light": 97.5, "mid": 142.7, "peak": 198.9 }
+        }
+      }
+    ]
+  }
+  

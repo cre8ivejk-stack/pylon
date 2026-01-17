@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>한전 전기요금 계산기</title>
+    <style>
+        /* 기본 스타일 초기화 */
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        /* 메인 컨테이너 */
+        .container {
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: auto;
+            /* 모바일에서 스크롤 문제 방지 */
+            max-height: none; 
+        }
+
+        /* PC 레이아웃 (1024px 이상) */
+        @media (min-width: 1024px) {
+            .container { 
+                flex-direction: row; 
+                height: 90vh;
+                max-height: 900px;
+            }
+        }
+
+        /* 1. 입력 섹션 */
+        .input-section {
+            padding: 1.5rem;
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            width: 100%;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        @media (min-width: 1024px) {
+            .input-section { 
+                width: 340px; /* 시간대 텍스트 여유 공간 */
+                border-bottom: none; 
+                border-right: 1px solid #e5e7eb; 
+            }
+        }
+
+        /* 2. 결과 목록 섹션 */
+        .list-section {
+            padding: 1.5rem;
+            background-color: white;
+            width: 100%;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid #e5e7eb;
+            flex-grow: 1;
+            min-height: 300px; /* 최소 높이 확보 */
+        }
+        @media (min-width: 1024px) {
+            .list-section { 
+                border-bottom: none; 
+                border-right: 1px solid #e5e7eb; 
+                width: 40%; 
+            }
+        }
+
+        /* 3. 상세 내용 섹션 */
+        .detail-section {
+            padding: 1.5rem;
+            background-color: #f8fafc;
+            width: 100%;
+            overflow-y: auto;
+            flex-grow: 1;
+            display: none;
+        }
+        @media (min-width: 1024px) {
+            .detail-section { 
+                display: block; 
+                width: 40%; 
+                background-color: white;
+            }
+        }
+        .detail-section.active {
+            display: block;
+        }
+
+        /* 타이포그래피 */
+        h1 { font-size: 1.25rem; font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; display: flex; align-items: center; }
+        h2 { font-size: 1.125rem; font-weight: 700; color: #1f2937; margin-bottom: 1rem; }
+        h3 { font-size: 1rem; font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; display: flex; align-items: center; }
+        p { margin-bottom: 0.5rem; }
+        .text-xs { font-size: 0.75rem; }
+        .text-sm { font-size: 0.875rem; }
+        .text-lg { font-size: 1.125rem; }
+        .text-xl { font-size: 1.25rem; }
+        .text-gray-500 { color: #6b7280; }
+        .text-gray-400 { color: #9ca3af; }
+        .text-blue-600 { color: #2563eb; }
+        .font-bold { font-weight: 700; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .flex { display: flex; }
+        .gap-2 { gap: 0.5rem; }
+        .mt-1 { margin-top: 0.25rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mt-4 { margin-top: 1rem; }
+        .mb-1 { margin-bottom: 0.25rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-3 { margin-bottom: 0.75rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .pt-2 { padding-top: 0.5rem; }
+        .pt-8 { padding-top: 2rem; }
+        
+        /* 시간대 라벨 수정 (세로 배치로 변경) */
+        .time-label { 
+            display: flex; 
+            flex-direction: column; /* 세로 배치로 변경하여 잘림 방지 */
+            align-items: flex-start; 
+            width: 100%; 
+            margin-bottom: 0.25rem;
+        }
+        .time-desc { 
+            font-size: 0.75rem; 
+            color: #2563eb; 
+            font-weight: normal; 
+            margin-top: 2px;
+            word-break: keep-all; /* 단어 단위 줄바꿈 */
+        }
+
+        /* 폼 요소 */
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; font-size: 0.75rem; font-weight: 700; color: #374151; margin-bottom: 0.25rem; }
+        .input-wrapper { position: relative; }
+        input, select {
+            width: 100%; padding: 0.6rem; /* 터치 영역 확대 */
+            border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 0.95rem; /* 모바일 가독성 */
+            transition: border-color 0.2s, box-shadow 0.2s;
+            appearance: none; -webkit-appearance: none; /* iOS 스타일 초기화 */
+            background-color: white;
+        }
+        select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+        }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+        /* 아이콘 관련 스타일 삭제 */
+        
+        /* 버튼 */
+        .btn {
+            width: 100%; background-color: #2563eb; color: white; font-weight: 700; padding: 0.9rem; /* 터치하기 편하게 */
+            border-radius: 0.375rem; border: none; cursor: pointer; transition: background-color 0.2s;
+            display: flex; justify-content: center; align-items: center; font-size: 1rem; margin-top: 1rem;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .btn:hover { background-color: #1d4ed8; }
+        .btn:active { background-color: #1e40af; transform: translateY(1px); }
+        .btn svg { width: 1rem; height: 1rem; margin-right: 0.5rem; fill: currentColor; }
+        .btn:disabled { background-color: #d1d5db; color: white; cursor: not-allowed; }
+
+        /* 테이블 */
+        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; text-align: left; border-collapse: collapse; font-size: 0.875rem; color: #4b5563; }
+        th { 
+            background-color: #f3f4f6; padding: 0.75rem; font-size: 0.75rem; 
+            text-transform: uppercase; color: #374151; position: sticky; top: 0; z-index: 10;
+        }
+        td { padding: 0.75rem; border-bottom: 1px solid #e5e7eb; }
+        tr.clickable-row:hover { background-color: #e5e7eb !important; }
+        tr.selected-row { background-color: #dbeafe !important; border-left: 4px solid #1e40af; }
+        tr.clickable-row { cursor: pointer; transition: background-color 0.15s; }
+        .bg-mint { background-color: #f0fdfa; }
+        .bg-coral { background-color: #fff1f2; }
+
+        /* 뱃지 */
+        .rank-badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 9999px; font-weight: bold; display: inline-block; }
+        .badge-1 { background-color: #2563eb; color: white; }
+        .badge-other { background-color: #e5e7eb; color: #374151; }
+        .rank-1 { background-color: #eff6ff; border-left: 4px solid #2563eb; }
+
+        /* 상세 카드 */
+        .detail-box { height: 100%; display: flex; flex-direction: column; }
+        .detail-card {
+            background-color: white; padding: 0.75rem; border-radius: 0.375rem; border: 1px solid #e5e7eb; margin-bottom: 0.75rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+        .border-t { border-top: 1px solid #e5e7eb; padding-top: 0.5rem; margin-top: 0.5rem; }
+        .border-dashed { border-top: 1px dashed #e5e7eb; margin: 0.5rem 0; }
+        .bg-gray-box { padding: 0.5rem; margin-top: 0.5rem; background-color: #f3f4f6; border-radius: 0.25rem; }
+        
+        /* 유틸리티 */
+        .hidden { display: none !important; }
+        .flex-center-col { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; text-align: center; color: #9ca3af; }
+        .icon-large { width: 4rem; height: 4rem; fill: #e5e7eb; margin-bottom: 1rem; }
+        .icon-yellow { color: #eab308; fill: #eab308; }
+        .icon-blue { fill: #3b82f6; }
+        
+        details summary { cursor: pointer; user-select: none; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    </style>
+</head>
+<body onload="updateTimeInfo()">
+
+    <div class="container">
+        
+        <!-- 1. 입력 섹션 -->
+        <div class="input-section">
+            <h1>
+                한전 전기요금 계산기
+            </h1>
+            <p class="text-xs text-gray-500 mb-6">2025년 4월 1일 시행 요금표 기준</p>
+
+            <!-- div로 변경하여 모바일 폼 이슈 원천 차단 -->
+            <div id="calculatorForm">
+                <div class="form-group">
+                    <label>대상 월 (Month)</label>
+                    <select id="month" onchange="updateTimeInfo()">
+                        <option value="1">1월 (겨울)</option>
+                        <option value="2">2월 (겨울)</option>
+                        <option value="3">3월 (봄)</option>
+                        <option value="4">4월 (봄)</option>
+                        <option value="5">5월 (봄)</option>
+                        <option value="6">6월 (여름)</option>
+                        <option value="7">7월 (여름)</option>
+                        <option value="8">8월 (여름)</option>
+                        <option value="9">9월 (가을)</option>
+                        <option value="10">10월 (가을)</option>
+                        <option value="11">11월 (겨울)</option>
+                        <option value="12">12월 (겨울)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>총 사용량 (kWh)</label>
+                    <input type="number" id="totalUsage" placeholder="예: 300" min="0">
+                </div>
+
+                <div class="border-t">
+                    <details class="text-xs">
+                        <summary class="font-bold text-gray-500">상세 설정 (계약전력 및 시간대별 사용량)</summary>
+                        <div class="bg-gray-box">
+                            <div class="form-group">
+                                <label>계약 전력 (kW)</label>
+                                <input type="number" id="contractPower" value="4" placeholder="예: 50" min="0">
+                                <p class="text-xs text-gray-400 mt-1">* 주택용은 계약전력 무관</p>
+                            </div>
+
+                            <div class="border-t mt-4 pt-2">
+                                <p class="text-xs font-bold mb-3">시간대별 사용량 (kWh)</p>
+                                
+                                <div class="form-group">
+                                    <div class="time-label">
+                                        <label class="mb-0">경부하</label>
+                                        <span id="labelLightTime" class="time-desc">22~08시</span>
+                                    </div>
+                                    <div class="input-wrapper mt-1">
+                                        <input type="number" id="usageLight" placeholder="0" min="0">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <div class="time-label">
+                                        <label class="mb-0">중간부하</label>
+                                        <span id="labelMidTime" class="time-desc">...</span>
+                                    </div>
+                                    <div class="input-wrapper mt-1">
+                                        <input type="number" id="usageMid" placeholder="0" min="0">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <div class="time-label">
+                                        <label class="mb-0">최대부하</label>
+                                        <span id="labelPeakTime" class="time-desc">...</span>
+                                    </div>
+                                    <div class="input-wrapper mt-1">
+                                        <input type="number" id="usagePeak" placeholder="0" min="0">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-2" style="line-height: 1.4;">* 주택용 및 일반용(갑)Ⅰ은 시간대 구분 없음</p>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="border-t">
+                    <details class="text-xs">
+                        <summary class="font-bold text-gray-500">추가 요금 설정</summary>
+                        <div class="bg-gray-box">
+                            <div class="form-group mb-2">
+                                <label>기후환경요금 (원/kWh)</label>
+                                <input type="number" id="rateClimate" value="9" min="0">
+                            </div>
+                            <div class="form-group mb-2">
+                                <label>연료비조정단가 (원/kWh)</label>
+                                <input type="number" id="rateFuel" value="5" min="0">
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="flex gap-2 mt-4">
+                    <button type="button" id="resetButton" onclick="resetForm()" class="btn mt-0" style="width: 3.5rem;" disabled>C</button>
+                    <button type="button" onclick="calculateAllPlans()" class="btn mt-0" style="flex-grow: 1;">
+                        <svg viewBox="0 0 384 512"><path d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V64c0-35.3-28.7-64-64-64H64zM96 120a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zm96 0a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zm96 0a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zM96 216a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zm96 0a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zm96 0a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zM96 312a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zm96 0a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zm96 0a24 24 0 1 1 48 0 24 24 0 1 1 -48 0zM80 408c0-13.3 10.7-24 24-24h96c13.3 0 24 10.7 24 24s-10.7 24-24 24H104c-13.3 0-24-10.7-24-24zm192 0c0-13.3 10.7-24 24-24h24c13.3 0 24 10.7 24 24s-10.7 24-24 24H296c-13.3 0-24-10.7-24-24z"/></svg>
+                        전체 비교 계산
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 결과 목록 섹션 -->
+        <div class="list-section">
+            <div id="initialState" class="flex-center-col">
+                <svg class="icon-large" viewBox="0 0 384 512"><path d="M384 112v288c0 26.51-21.49 48-48 48h-288c-26.51 0-48-21.49-48-48v-288c0-26.51 21.49-48 48-48h288C362.5 64 384 85.49 384 112zM336 268v-116c0-6.625-5.375-12-12-12h-64c-6.625 0-12 5.375-12 12v116c0 6.625 5.375 12 12 12h64C330.6 280 336 274.6 336 268zM200 324h-112c-6.625 0-12 5.375-12 12v40c0 6.625 5.375 12 12 12h112c6.625 0 12-5.375 12-12v-40C212 329.4 206.6 324 200 324zM336 324h-80c-6.625 0-12 5.375-12 12v40c0 6.625 5.375 12 12 12h80c6.625 0 12-5.375 12-12v-40C348 329.4 342.6 324 336 324zM136 140c0-6.625-5.375-12-12-12h-36c-6.625 0-12 5.375-12 12v20c0 6.625 5.375 12 12 12h36c6.625 0 12-5.375 12-12v-20zM212 140c0-6.625-5.375-12-12-12h-36c-6.625 0-12 5.375-12 12v20c0 6.625 5.375 12 12 12h36c6.625 0 12-5.375 12-12v-20zM136 200c0-6.625-5.375-12-12-12h-36c-6.625 0-12 5.375-12 12v20c0 6.625 5.375 12 12 12h36c6.625 0 12-5.375 12-12v-20zM212 200c0-6.625-5.375-12-12-12h-36c-6.625 0-12 5.375-12 12v20c0 6.625 5.375 12 12 12h36c6.625 0 12-5.375 12-12v-20zM136 260c0-6.625-5.375-12-12-12h-36c-6.625 0-12 5.375-12 12v20c0 6.625 5.375 12 12 12h36c6.625 0 12-5.375 12-12v-20zM212 260c0-6.625-5.375-12-12-12h-36c-6.625 0-12 5.375-12 12v20c0 6.625 5.375 12 12 12h36c6.625 0 12-5.375 12-12v-20z"/></svg>
+                <p>좌측/상단 정보를 입력하면<br>요금제별 예상 금액을 계산합니다.</p>
+            </div>
+
+            <div id="resultListContent" class="hidden">
+                <div class="flex-between mb-4 pb-2" style="border-bottom: 1px solid #e5e7eb;">
+                    <div>
+                        <h2>비교 분석</h2>
+                        <p class="text-xs text-gray-500">목록을 클릭하여 상세 내역 확인</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-400">총 사용량</p>
+                        <p class="text-lg font-bold text-blue-600" id="totalUsageDisplay">0 kWh</p>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="w-full text-sm text-left text-gray-600">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                            <tr>
+                                <th style="width: 40%;">요금제 명</th>
+                                <th class="text-right">청구액</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparisonTableBody">
+                            <!-- JS 행 추가 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 상세 내용 섹션 -->
+        <div id="detailSection" class="detail-section">
+            <div id="detailPlaceholder" class="flex-center-col pt-8">
+                <p>목록에서 요금제를 선택하면<br>상세 계산 과정이 표시됩니다.</p>
+            </div>
+
+            <div id="detailCalculationArea" class="hidden detail-box">
+                <button id="backButton" class="btn hidden mb-4" style="width: auto; padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <svg viewBox="0 0 448 512" style="width:0.8rem; height:0.8rem; margin-right:0.5rem;"><path fill="currentColor" d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.2 288H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H109.2l105.3-105.3c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg>
+                    목록으로 돌아가기
+                </button>
+
+                <h3 style="color: #1f2937;">
+                    <svg class="icon-blue" style="width:1.2rem; height:1.2rem; margin-right:0.5rem;" viewBox="0 0 512 512"><path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z"/></svg>
+                    <span id="detailPlanName">상세 내역</span>
+                </h3>
+                
+                <div class="grid text-sm">
+                    <!-- 기본요금 -->
+                    <div class="detail-card">
+                        <p class="text-xs text-gray-400 font-bold mb-1">1. 기본요금</p>
+                        <p id="detailBaseFormula" class="text-xs" style="font-family: monospace; word-break: break-all;">-</p>
+                        <div class="text-right font-bold mt-1" id="detailBaseTotal">0원</div>
+                    </div>
+
+                    <!-- 전력량 요금 -->
+                    <div class="detail-card">
+                        <p class="text-xs text-gray-400 font-bold mb-1">2. 전력량 요금</p>
+                        <div id="detailUsageFormula" class="text-xs" style="font-family: monospace; max-height: 8rem; overflow-y: auto;">-</div>
+                        <div class="border-dashed"></div>
+                        <div class="text-right font-bold" id="detailUsageTotal">0원</div>
+                    </div>
+
+                    <!-- 기후/연료비 -->
+                    <div class="detail-card">
+                        <p class="text-xs text-gray-400 font-bold mb-1">3. 기타 요금</p>
+                        <div class="flex-between text-xs">
+                            <span>기후환경 (<span id="textClimateRate">9</span>원)</span>
+                            <span id="detailClimateCost">0원</span>
+                        </div>
+                        <div class="flex-between text-xs">
+                            <span>연료비조정 (<span id="textFuelRate">5</span>원)</span>
+                            <span id="detailFuelCost">0원</span>
+                        </div>
+                    </div>
+
+                    <!-- 최종 합계 -->
+                    <div class="detail-card" style="background-color: #eff6ff; border-color: #bfdbfe;">
+                        <div class="flex-between text-xs text-gray-500">
+                            <span>요금계</span>
+                            <span id="detailElectricBill" class="font-bold">0원</span>
+                        </div>
+                        <div class="flex-between text-xs text-gray-500">
+                            <span>부가세(10%)</span>
+                            <span id="detailVat">0원</span>
+                        </div>
+                        <div class="flex-between text-xs text-gray-500 mb-2">
+                            <span>기금(2.7%)</span>
+                            <span id="detailFund">0원</span>
+                        </div>
+                        <div class="border-t flex-between pt-2" style="border-top-color: #93c5fd;">
+                            <span class="text-sm font-bold">최종 청구액</span>
+                            <span id="detailFinalTotal" class="text-xl font-bold text-blue-600">0원</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 시간대 업데이트 함수
+        function updateTimeInfo() {
+            try {
+                const month = parseInt(document.getElementById('month').value);
+                const isWinter = [11, 12, 1, 2].includes(month);
+                
+                document.getElementById('labelLightTime').textContent = "22~08시";
+                
+                if (isWinter) {
+                    document.getElementById('labelMidTime').textContent = "08~09, 12~16, 19~22시";
+                    document.getElementById('labelPeakTime').textContent = "09~12, 16~19시";
+                } else {
+                    document.getElementById('labelMidTime').textContent = "08~11, 12~13, 18~22시";
+                    document.getElementById('labelPeakTime').textContent = "11~12, 13~18시";
+                }
+            } catch (e) {
+                console.error("Time update error", e);
+            }
+        }
+
+        let globalResults = [];
+        let pricingData = null; // 요금 데이터 저장 변수
+
+        // JSON 데이터 로드 함수
+        async function loadPricingData() {
+            try {
+                const response = await fetch('pricetable.json');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                
+                // 전처리: JSON의 null 값을 Infinity로 변환 (주택용 누진세 마지막 구간)
+                data.plans.forEach(plan => {
+                    if (plan.tiers) {
+                        for (const season in plan.tiers) {
+                            plan.tiers[season].forEach(tier => {
+                                if (tier.limit === null) tier.limit = Infinity;
+                            });
+                        }
+                    }
+                });
+                
+                pricingData = data;
+                console.log("요금 데이터 로드 완료");
+            } catch (error) {
+                console.error("요금 데이터 로드 실패:", error);
+                alert("요금표 데이터를 불러오는데 실패했습니다.\n(로컬 실행 시 웹 서버 환경이 필요합니다)");
+            }
+        }
+
+        // 페이지 로드 시 데이터 불러오기
+        loadPricingData();
+
+        function getSeason(month) {
+            month = parseInt(month);
+            if ([6, 7, 8].includes(month)) return 'summer';
+            if ([11, 12, 1, 2].includes(month)) return 'winter';
+            return 'springFall';
+        }
+
+        function getResidentialSeasonType(month) {
+            month = parseInt(month);
+            if ([7, 8].includes(month)) return 'summer';
+            if ([12, 1, 2].includes(month)) return 'winter';
+            return 'other';
+        }
+
+        function formatCurrency(num) {
+            return new Intl.NumberFormat('ko-KR').format(Math.floor(num)) + ' 원';
+        }
+
+        function validateInputs() {
+            const inputs = document.querySelectorAll('#calculatorForm input[type="number"]');
+            for (const input of inputs) {
+                let value = parseFloat(input.value);
+                if (!isNaN(value) && value < 0) {
+                    let label = input.placeholder;
+                    const formGroup = input.closest('.form-group');
+                    if (formGroup) {
+                        const labelEl = formGroup.querySelector('label');
+                        if (labelEl) label = labelEl.textContent;
+                    }
+                    alert(`입력 값은 0보다 작을 수 없습니다. '${label}' 필드의 음수 값은 0으로 처리됩니다.`);
+                    input.value = 0;
+                }
+            }
+        }
+
+        function calculateAllPlans() {
+            // 모바일 키보드 닫기 (선택적)
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
+
+            try {
+                // 데이터 로드 확인
+                if (!pricingData) {
+                    alert("요금 데이터를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+                    return;
+                }
+                const { plans: RATE_PLANS, config } = pricingData;
+                const { DEFAULT_CONTRACT_POWER, VAT_RATE, FUND_RATE, SUPER_USER_RATE_THRESHOLD } = config;
+
+                // Validate inputs: corrects negative values to 0 and alerts the user.
+                // It now always returns true, allowing the calculation to proceed with corrected values.
+                validateInputs(); 
+
+                const month = parseInt(document.getElementById('month').value);
+                const contractPower = parseFloat(document.getElementById('contractPower').value) || 0;
+                const usageLight = parseFloat(document.getElementById('usageLight').value) || 0;
+                const usageMid = parseFloat(document.getElementById('usageMid').value) || 0;
+                const usagePeak = parseFloat(document.getElementById('usagePeak').value) || 0;
+                const rateClimate = parseFloat(document.getElementById('rateClimate').value) || 9; // Default to 9 if empty/NaN
+                const rateFuel = parseFloat(document.getElementById('rateFuel').value) || 5; // Default to 5 if empty/NaN
+
+                const totalUsage = usageLight + usageMid + usagePeak;
+
+                // 사용량이 0이면 계산을 중단하고 사용자에게 알림
+                if (totalUsage === 0) {
+                    alert("시간대별 사용량을 하나 이상 입력해주세요. 총 사용량이 0이면 요금이 계산되지 않습니다.");
+                    return;
+                }
+
+                const season = getSeason(month);
+                const resSeasonType = getResidentialSeasonType(month);
+                
+                document.getElementById('totalUsageDisplay').textContent = totalUsage.toLocaleString() + " kWh";
+
+                let results = [];
+
+                RATE_PLANS.forEach(plan => {
+                    let baseCost = 0;
+                    let usageCost = 0; // BUG FIX: 변수명을 usageCost로 수정
+                    let detail = { base: "", usage: [], climate: 0, fuel: 0, vat: 0, fund: 0 };
+
+                    // 1. 기본요금 & 전력량요금 계산
+                    if (plan.type === 'residential') {
+                        const currentTiers = plan.tiers[resSeasonType];
+                        
+                        let appliedTier = currentTiers[0];
+                        let stepIndex = 1;
+
+                        for (let i = 0; i < currentTiers.length; i++) {
+                            if (totalUsage <= currentTiers[i].limit) {
+                                appliedTier = currentTiers[i];
+                                stepIndex = i + 1;
+                                break;
+                            }
+                            if (i === currentTiers.length - 1) {
+                                appliedTier = currentTiers[i];
+                                stepIndex = i + 1;
+                            }
+                        }
+
+                        baseCost = appliedTier.base;
+                        const seasonName = resSeasonType === 'summer' ? '하계' : (resSeasonType === 'winter' ? '동계' : '기타계절');
+                        detail.base = `주택용 ${seasonName} ${stepIndex}단계`;
+                        
+                        let remainingUsage = totalUsage;
+                        let prevLimit = 0;
+
+                        for (let i = 0; i < currentTiers.length; i++) {
+                            const tier = currentTiers[i];
+                            const limit = tier.limit === Infinity ? totalUsage : tier.limit; 
+                            const span = limit - prevLimit; 
+                            
+                            if (span <= 0) continue; 
+
+                            const usageInTier = Math.min(remainingUsage, span);
+                            
+                            if (usageInTier > 0) {
+                                const cost = usageInTier * tier.rate;
+                                usageCost += cost;
+                                let rangeText = "";
+                                if (tier.limit === Infinity) {
+                                    rangeText = `${prevLimit}초과`;
+                                } else {
+                                    rangeText = i === 0 ? `~${tier.limit}` : `${prevLimit+1}~${tier.limit}`;
+                                }
+                                
+                                let note = "";
+                                if ((resSeasonType === 'summer' || resSeasonType === 'winter') && tier.rate > SUPER_USER_RATE_THRESHOLD) {
+                                    note = "(슈퍼)";
+                                }
+
+                                detail.usage.push(`${i+1}단계(${rangeText}): ${usageInTier}kWh×${tier.rate}${note}`);
+                                
+                                remainingUsage -= usageInTier;
+                                prevLimit = limit;
+                            }
+                            
+                            if (remainingUsage <= 0) break;
+                        }
+                    }
+                    else if (plan.type === 'general_seasonal') {
+                        baseCost = contractPower * plan.basePrice;
+                        detail.base = `${contractPower}kW × ${plan.basePrice}원`;
+                        
+                        const seasonRate = plan.seasons[season];
+                        usageCost = totalUsage * seasonRate;
+                        const seasonName = season === 'summer' ? '여름' : (season === 'winter' ? '겨울' : '봄가을');
+                        detail.usage.push(`${seasonName}: ${totalUsage}kWh×${seasonRate}`);
+                    }
+                    else if (plan.type === 'general_tou') {
+                        baseCost = contractPower * plan.basePrice;
+                        detail.base = `${contractPower}kW × ${plan.basePrice}원`;
+
+                        const rates = plan.seasons[season];
+                        usageCost = (usageLight * rates.light) + (usageMid * rates.mid) + (usagePeak * rates.peak);
+                        
+                        const seasonName = season === 'summer' ? '여름' : (season === 'winter' ? '겨울' : '봄가을');
+                        
+                        if(usageLight > 0) detail.usage.push(`${seasonName} 경부하: ${usageLight}×${rates.light}`);
+                        if(usageMid > 0) detail.usage.push(`${seasonName} 중간: ${usageMid}×${rates.mid}`);
+                        if(usagePeak > 0) detail.usage.push(`${seasonName} 최대: ${usagePeak}×${rates.peak}`);
+                    }
+
+                    const climateCost = totalUsage * rateClimate;
+                    const fuelCost = totalUsage * rateFuel;
+
+                    const electricBill = Math.floor(baseCost + usageCost + climateCost + fuelCost);
+
+                    const vat = Math.round(electricBill * VAT_RATE);
+                    const fund = Math.floor((electricBill * FUND_RATE) / 10) * 10;
+
+                    const totalBill = electricBill + vat + fund;
+
+                    detail.climate = climateCost;
+                    detail.fuel = fuelCost;
+                    detail.electricBill = electricBill;
+                    detail.vat = vat;
+                    detail.fund = fund;
+
+                    results.push({
+                        id: plan.id,
+                        name: plan.name,
+                        baseCost: baseCost,
+                        usageCost: usageCost,
+                        totalBill: totalBill,
+                        detail: detail
+                    });
+                });
+
+                globalResults = results;
+                
+                // 최대 청구액 계산 (막대 그래프 비율용)
+                const maxBill = Math.max(...results.map(r => r.totalBill)) || 1;
+                // 최소 청구액 계산 (최저가 색상용)
+                const minBill = Math.min(...results.map(r => r.totalBill));
+
+                // 렌더링
+                const tableBody = document.getElementById('comparisonTableBody');
+                tableBody.innerHTML = '';
+
+                results.forEach((res, index) => {
+                    const barWidth = (res.totalBill / maxBill) * 80;
+                    const barColor = (res.totalBill === minBill) ? '#10b981' : '#3b82f6';
+
+                    // 배경색 클래스 결정
+                    let bgClass = 'bg-coral'; // 기본: 아주 희미한 코랄
+                    if (res.id === 'res_low' || res.id === 'gen_gap_low') {
+                        bgClass = 'bg-mint'; // 주택용 저압, 일반용(갑)I 저압: 아주 희미한 민트
+                    }
+                    
+                    const html = `
+                        <tr id="row-${index}" onclick="showDetail(${index})" class="clickable-row ${bgClass}">
+                            <td>
+                                <div style="font-weight: 500; color: #111827; font-size: 0.7rem;">${res.name}</div>
+                            </td>
+                            <td style="vertical-align: middle;">
+                                <div style="display: flex; align-items: center;">
+                                    <div style="flex-grow: 1; background-color: #f3f4f6; height: 0.75rem; border-radius: 0.25rem; margin-right: 0.75rem; overflow: hidden;">
+                                        <div style="width: ${barWidth}%; background-color: ${barColor}; height: 100%;"></div>
+                                    </div>
+                                    <div style="text-align: right; font-weight: bold; color: #1f2937; white-space: nowrap; min-width: 4.5rem; font-size: 0.7rem;">
+                                        ${formatCurrency(res.totalBill)}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tableBody.insertAdjacentHTML('beforeend', html);
+                });
+
+                // 화면 전환
+                document.getElementById('initialState').style.display = 'none';
+                document.getElementById('resultListContent').classList.remove('hidden');
+                
+                // 상세 영역 초기화
+                document.getElementById('detailCalculationArea').classList.add('hidden');
+                document.getElementById('detailPlaceholder').classList.remove('hidden');
+
+                // Show/hide back button based on screen width
+                if (window.innerWidth < 1024) {
+                    document.getElementById('backButton').classList.remove('hidden');
+                }
+
+                document.getElementById('textClimateRate').textContent = rateClimate;
+                document.getElementById('textFuelRate').textContent = rateFuel;
+
+                // 모바일일 경우 결과 목록으로 스크롤 (지연 추가로 레이아웃 안정화 후 실행)
+                if (window.innerWidth < 1024) {
+                    setTimeout(() => {
+                        const listSection = document.querySelector('.list-section');
+                        if(listSection) listSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                }
+            } catch (error) {
+                console.error("Calculation Error:", error);
+                alert("계산 중 오류가 발생했습니다: " + error.message);
+            }
+        }
+
+        function showDetail(index) {
+            try {
+                const data = globalResults[index];
+                if (!data) return;
+
+                const rows = document.querySelectorAll('#comparisonTableBody tr');
+                rows.forEach(r => r.classList.remove('selected-row'));
+                
+                const selectedRow = document.getElementById(`row-${index}`);
+                if(selectedRow) selectedRow.classList.add('selected-row');
+
+                document.getElementById('detailPlaceholder').classList.add('hidden');
+                const detailArea = document.getElementById('detailCalculationArea');
+                detailArea.classList.remove('hidden');
+                
+                const detailSection = document.getElementById('detailSection');
+                detailSection.classList.add('active');
+
+                document.getElementById('detailPlanName').textContent = `[${index + 1}위] ${data.name} 상세`;
+                
+                document.getElementById('detailBaseFormula').textContent = data.detail.base;
+                document.getElementById('detailBaseTotal').textContent = formatCurrency(data.baseCost);
+
+                const usageContainer = document.getElementById('detailUsageFormula');
+                usageContainer.innerHTML = '';
+                if (data.detail.usage.length === 0) {
+                    usageContainer.innerHTML = '<span class="text-gray-400">사용량 없음</span>';
+                } else {
+                    data.detail.usage.forEach(text => { // BUG FIX: 안정적인 문자열 분리 로직으로 변경
+                        const div = document.createElement('div');
+                        div.style.display = 'flex';
+                        div.style.justifyContent = 'space-between';
+                        
+                        const colonIndex = text.indexOf(':');
+                        if (colonIndex > -1) {
+                            const key = text.substring(0, colonIndex);
+                            const value = text.substring(colonIndex + 1);
+                            div.innerHTML = `<span>${key}</span><span class="font-bold">${value}</span>`;
+                        } else {
+                            div.textContent = text; // 콜론이 없는 경우에 대한 안전장치
+                        }
+                        usageContainer.appendChild(div);
+                    });
+                }
+                document.getElementById('detailUsageTotal').textContent = formatCurrency(data.usageCost);
+
+                document.getElementById('detailClimateCost').textContent = formatCurrency(data.detail.climate);
+                document.getElementById('detailFuelCost').textContent = formatCurrency(data.detail.fuel);
+
+                document.getElementById('detailElectricBill').textContent = formatCurrency(data.detail.electricBill);
+                document.getElementById('detailVat').textContent = formatCurrency(data.detail.vat);
+                document.getElementById('detailFund').textContent = formatCurrency(data.detail.fund);
+
+                document.getElementById('detailFinalTotal').textContent = formatCurrency(data.totalBill);
+
+                // 모바일에서 상세 내용으로 자동 스크롤
+                if (window.innerWidth < 1024) {
+                    setTimeout(() => {
+                        detailSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                }
+            } catch (e) {
+                console.error("Detail Error:", e);
+            }
+        }
+
+        // Back button functionality for mobile
+        document.getElementById('backButton').addEventListener('click', () => {
+            document.getElementById('detailCalculationArea').classList.add('hidden');
+            document.getElementById('detailPlaceholder').classList.remove('hidden');
+            document.getElementById('backButton').classList.add('hidden');
+            // Scroll back to the list section
+            const listSection = document.querySelector('.list-section');
+            if(listSection) listSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+        // 총 사용량 입력 시 자동 계산 로직
+        const totalUsageInput = document.getElementById('totalUsage');
+        const contractPowerInput = document.getElementById('contractPower');
+        const usageLightInput = document.getElementById('usageLight');
+        const usageMidInput = document.getElementById('usageMid');
+        const usagePeakInput = document.getElementById('usagePeak');
+        const rateClimateInput = document.getElementById('rateClimate');
+        const rateFuelInput = document.getElementById('rateFuel');
+
+        totalUsageInput.addEventListener('input', function() {
+            const total = parseFloat(this.value);
+            
+            if (!isNaN(total)) {
+                // 1. 계약전력 4kW 설정
+                contractPowerInput.value = 4;
+
+                // 2. 시간대별 사용량 1/3 등분 (정수 처리)
+                const part = Math.floor(total / 3);
+                
+                usageLightInput.value = part;
+                usagePeakInput.value = part;
+                // 합계 보정을 위해 나머지는 중간부하에 배정 (요청사항 반영)
+                usageMidInput.value = total - (part * 2);
+
+                // 3. 추가 요금 설정 자동 입력
+                rateClimateInput.value = 9;
+                rateFuelInput.value = 5;
+            }
+        });
+
+        // 시간대별 사용량 수정 시 총 사용량 업데이트
+        function syncTotalUsage() {
+            const l = parseFloat(usageLightInput.value) || 0;
+            const m = parseFloat(usageMidInput.value) || 0;
+            const p = parseFloat(usagePeakInput.value) || 0;
+            totalUsageInput.value = (l + m + p).toFixed(1).replace(/\.0$/, '');
+        }
+
+        usageLightInput.addEventListener('input', syncTotalUsage);
+        usageMidInput.addEventListener('input', syncTotalUsage);
+        usagePeakInput.addEventListener('input', syncTotalUsage);
+
+        // 초기화 및 상태 체크 로직
+        function resetForm() {
+            document.getElementById('month').value = "1";
+            updateTimeInfo();
+            
+            document.getElementById('totalUsage').value = "";
+            document.getElementById('contractPower').value = "4";
+            document.getElementById('usageLight').value = "";
+            document.getElementById('usageMid').value = "";
+            document.getElementById('usagePeak').value = "";
+            document.getElementById('rateClimate').value = "9";
+            document.getElementById('rateFuel').value = "5";
+
+            // 결과 화면 초기화
+            document.getElementById('initialState').style.display = 'flex';
+            document.getElementById('resultListContent').classList.add('hidden');
+            document.getElementById('detailCalculationArea').classList.add('hidden');
+            document.getElementById('detailPlaceholder').classList.remove('hidden');
+            document.getElementById('detailSection').classList.remove('active');
+            
+            // 모든 details 요소 닫기 (상세 설정, 추가 요금 설정)
+            document.querySelectorAll('details').forEach(el => el.removeAttribute('open'));
+            
+            checkFormState();
+        }
+
+        function checkFormState() {
+            const month = document.getElementById('month').value;
+            const totalUsage = document.getElementById('totalUsage').value;
+            const contractPower = document.getElementById('contractPower').value;
+            const usageLight = document.getElementById('usageLight').value;
+            const usageMid = document.getElementById('usageMid').value;
+            const usagePeak = document.getElementById('usagePeak').value;
+            const rateClimate = document.getElementById('rateClimate').value;
+            const rateFuel = document.getElementById('rateFuel').value;
+
+            const isDefault = (month === "1" && totalUsage === "" && contractPower === "4" && usageLight === "" && usageMid === "" && usagePeak === "" && rateClimate === "9" && rateFuel === "5");
+            document.getElementById('resetButton').disabled = isDefault;
+        }
+
+        // 모든 입력 필드에 상태 체크 이벤트 리스너 추가
+        const allInputs = document.querySelectorAll('#calculatorForm input, #calculatorForm select');
+        allInputs.forEach(el => {
+            el.addEventListener('input', checkFormState);
+            el.addEventListener('change', checkFormState);
+        });
+    </script>
+</body>
+</html>

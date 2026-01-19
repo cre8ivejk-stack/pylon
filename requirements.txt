@@ -1,5 +1,5 @@
 # PYLON - SKT Network센터 Energy Operations Platform
-# Python 3.11 required (Streamlit Cloud compatible)
+# Python 3.10 required (Streamlit Cloud compatible)
 
 # Core framework
 streamlit>=1.30.0,<2.0.0
@@ -10,7 +10,9 @@ openai>=1.0.0,<2.0.0
 # Data processing
 pandas>=2.0.3,<3.0.0
 numpy>=1.24.3,<2.0.0
-pyarrow>=14.0.1,<17.0.0
+
+# Parquet support - fastparquet은 pure Python이라 빌드 불필요
+fastparquet>=2023.10.0
 
 # Visualization
 plotly>=5.18.0,<6.0.0
